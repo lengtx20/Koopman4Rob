@@ -74,10 +74,10 @@ python3 visualize_fisher.py --file_path="path to your .pt file" --threshold=None
 
 ## 💡 Tips
 
-- **Data format**: each row should be `[x_t, a_t, x_{t+1}]`
-- **Normalization**: enable with `normalize=True` in `KoopmanRunner`
-- **Trajectory smoothing**: edit `smooth_curve()` in `utils/utils.py`
-- **Multi-task setting**: manage `task_id` carefully when using EWC
+- **Data format**: each row should be `[x_t, a_t, x_{t+1}]`. General shape [N, x+a+x].
+- **Normalization**: enable with `normalize=True` in `KoopmanRunner`, but requires self-defining.
+- **Trajectory smoothing**: edit `smooth_curve()` in `utils/utils.py`.
+- **Multi-task setting**: currently enabling only single training.
 
 
 
