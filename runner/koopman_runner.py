@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from utils.utils import smooth_curve
 
+
 class KoopmanRunner:
     def __init__(self, model, ewc_model, train_data, val_data, optimizer, loss_fn, device, normalize=False, ewc_lambda=0.0):
         """
@@ -215,8 +216,8 @@ class KoopmanRunner:
             total_loss = 0
 
             pbar = tqdm(range(self.train_data.shape[0]), desc=f"[Train] Epoch {epoch+1}/{max_epochs}", leave=False)
-            self.register_gradient_masks(threshold_mode=threshold_mode, ewc_threshold=ewc_threshold)
-            
+            # self.register_gradient_masks(threshold_mode=threshold_mode, ewc_threshold=ewc_threshold)
+
             for i in pbar:
             # for i in range(self.train_data.shape[0]):
                 x_t, a_t, x_t1 = self._process_batch(self.train_data, i)
@@ -363,5 +364,3 @@ class KoopmanRunner:
 
         plt.tight_layout()
         plt.show()
-
-

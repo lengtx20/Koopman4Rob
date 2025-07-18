@@ -27,6 +27,7 @@ env/
 *.npz
 *.pth
 *.pt
+*.pkl
 
 # VSCode 配置
 .vscode/

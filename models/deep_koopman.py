@@ -4,9 +4,10 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: F401
 
-def get_activation(name):
+
+def get_activation(name: str):
     return {
         "relu": nn.ReLU(),
         "sigmoid": nn.Sigmoid(),
@@ -16,6 +17,7 @@ def get_activation(name):
         "mish": nn.Mish(),
         "linear": nn.Identity(),
     }[name]
+
 
 class Encoder(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_sizes, lifted_dim, activation,
@@ -28,7 +30,8 @@ class Encoder(nn.Module):
         self.hidden_sizes = hidden_sizes
         self.activation = activation
         self.include_iden_state = include_iden_state
-        self.output_size = lifted_dim - state_dim if include_iden_state else lifted_dim # lifted dim is the final output dimension of the encoder
+        # lifted dim is the final output dimension of the encoder
+        self.output_size = lifted_dim - state_dim if include_iden_state else lifted_dim 
 
         layers = []
         self.sizes = [self.state_dim] + self.hidden_sizes + [self.output_size]
@@ -130,6 +133,7 @@ class Deep_Koopman(nn.Module):
         self.init_matrix()
 
         for param in self.parameters():
+            print(type(param), param.size())
             param.requires_grad = requires_grad
 
     def set_seed(self, seed):
@@ -139,6 +143,13 @@ class Deep_Koopman(nn.Module):
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
     
+    def init_matrix(self):
+        self.A = nn.Parameter(torch.empty(self.lifted_dim, self.lifted_dim))
+        self.B = nn.Parameter(torch.empty(self.lifted_dim, self.action_dim))
+        # He initialization
+        nn.init.kaiming_uniform_(self.A, a=0, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.B, a=0, mode='fan_in', nonlinearity='relu')
+
     def to_device(self, device):
         self.device = device
         self.encoder.to(device)
@@ -146,12 +157,6 @@ class Deep_Koopman(nn.Module):
         self.A.data = self.A.data.to(device)
         self.B.data = self.B.data.to(device)
 
-    def init_matrix(self):
-        self.A = nn.Parameter(torch.empty(self.lifted_dim, self.lifted_dim))
-        self.B = nn.Parameter(torch.empty(self.lifted_dim, self.action_dim))
-        nn.init.kaiming_uniform_(self.A, a=0, mode='fan_in', nonlinearity='relu')   # He initialization
-        nn.init.kaiming_uniform_(self.B, a=0, mode='fan_in', nonlinearity='relu')
-    
     def clip_A_spectral_radius(self, max_radius=1.0):
         """Clips the spectral radius of matrix A to a maximum value"""
         with torch.no_grad():
@@ -159,7 +164,7 @@ class Deep_Koopman(nn.Module):
             S_clipped = torch.clamp(S, max=max_radius)
             self.A.data = (U @ torch.diag(S_clipped) @ Vh).to(self.A.device)
 
-    def encode(self, x):
+    def encode(self, x) -> torch.Tensor:
         '''x -> z'''
         return self.encoder(x)
 
@@ -167,13 +172,14 @@ class Deep_Koopman(nn.Module):
         '''z -> x'''
         return self.decoder(z, get_action)
 
-    def linear_dynamics(self, z, u):
+    def linear_dynamics(self, z: torch.Tensor, u: torch.Tensor):
         '''z -> z_next = A * z + B * u'''
-        return z @ self.A.T + u @ self.B.T
-    
-    def forward(self, x, u, get_action=False):
+        return self.A @ z.T + self.B @ u.T
+
+    def forward(self, x: torch.Tensor, u: torch.Tensor, get_action: bool = False) -> torch.Tensor:
         """Predict next state: x -> z -> z_next -> x_next"""
         z = self.encode(x)
+        # print(z.shape, u.shape)
         z_next = self.linear_dynamics(z, u)
         return self.decode(z_next, get_action)
 
@@ -188,16 +194,17 @@ class Deep_Koopman(nn.Module):
 
     def save(self, model_dir):
         torch.save(self.encoder.state_dict(), f"{model_dir}/encoder.pth")
+        torch.save(self.decoder.state_dict(), f"{model_dir}/decoder.pth")
         torch.save(self.A.data, f"{model_dir}/A.pth")
         torch.save(self.B.data, f"{model_dir}/B.pth")
 
     def load(self, model_dir):
         self.encoder.load_state_dict(torch.load(f"{model_dir}/encoder.pth"))
+        self.decoder.load_state_dict(torch.load(f"{model_dir}/decoder.pth"))
         self.A.data = torch.load(f"{model_dir}/A.pth")
         self.B.data = torch.load(f"{model_dir}/B.pth")
-        
+
     def __repr__(self):
         return (f"Deep_Koopman(state_dim={self.state_dim}, action_dim={self.action_dim}, lifted_dim={self.lifted_dim}, "
                 f"hidden_sizes={self.hidden_sizes}, activation={self.activation}, "
                 f"include_iden_state={self.include_iden_state}, iden_decoder={self.iden_decoder})")
-
