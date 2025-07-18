@@ -5,7 +5,6 @@ import torch
 import torch.optim as optim
 from torch.nn import MSELoss
 from models.deep_koopman import Deep_Koopman
-from models.ewc import EWC
 from runner.koopman_runner import KoopmanRunner
 from data.load_pickle_data import load_pickle_data
 import os

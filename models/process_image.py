@@ -70,19 +70,19 @@ class EncodeImage:
             # 如果仍大于3维，尝试取第一个元素（针对批量图像的情况，如(2, H, W, 3)取第0个）
             image_array = image_array[0]  # 取第一个元素，将4维→3维
             # 再次检查维度（防止取元素后仍不符合）
-            assert (
-                image_array.ndim == 3
-            ), f"处理后仍为{image_array.ndim}D，shape: {image_array.shape}"
+            assert image_array.ndim == 3, (
+                f"处理后仍为{image_array.ndim}D，shape: {image_array.shape}"
+            )
 
         # 确保最终是3D数组
-        assert (
-            image_array.ndim == 3
-        ), f"期望3D数组，处理后为{image_array.ndim}D，shape: {image_array.shape}"
+        assert image_array.ndim == 3, (
+            f"期望3D数组，处理后为{image_array.ndim}D，shape: {image_array.shape}"
+        )
 
         # 确保通道数为3（RGB，最后一维为3）
-        assert (
-            image_array.shape[-1] == 3
-        ), f"期望最后一维为3个通道（RGB），实际为{image_array.shape[-1]}，shape: {image_array.shape}"
+        assert image_array.shape[-1] == 3, (
+            f"期望最后一维为3个通道（RGB），实际为{image_array.shape[-1]}，shape: {image_array.shape}"
+        )
 
         image_tensor = self.transform(image_array)
         image_tensor = image_tensor.unsqueeze(0)  # 添加批次维度
@@ -156,10 +156,10 @@ class EncodeImage:
                 wrist_arr = obs["wrist"]
                 env_close_arr = obs["env_close"]
             except Exception as e:
-                print(f"episode {i+1} 处理失败: {str(e)}")
+                print(f"episode {i + 1} 处理失败: {str(e)}")
                 continue
 
-            print(f"\nepisode {i+1} - 原始shape:")
+            print(f"\nepisode {i + 1} - 原始shape:")
             print(f"  wrist: {wrist_arr.shape}, env_close: {env_close_arr.shape}")
 
             # 提取特征
@@ -171,7 +171,7 @@ class EncodeImage:
             features_env_close.append(feat_env)
             success_count += 1
             print(
-                f"episode {i+1} 处理成功 {feat_wrist.squeeze().shape}（累计: {success_count}）"
+                f"episode {i + 1} 处理成功 {feat_wrist.squeeze().shape}（累计: {success_count}）"
             )
 
         print(f"\n处理完成，成功{success_count}/{len(data)}个episode")

@@ -1,9 +1,9 @@
 import os
-import numpy as np
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
+
 
 class EWC:
     def __init__(self, model, data, loss_fn, device, threshold=None):
@@ -12,7 +12,11 @@ class EWC:
         self.loss_fn = loss_fn
         self.threshold = threshold
 
-        self.params = {n: p.clone().detach() for n, p in model.named_parameters() if p.requires_grad}
+        self.params = {
+            n: p.clone().detach()
+            for n, p in model.named_parameters()
+            if p.requires_grad
+        }
         # self.fisher = self.compute_fisher(data)
         self.fisher = None
         self.masks = {}
@@ -26,9 +30,11 @@ class EWC:
 
     def compute_fisher(self, data, batch_size=64):
         # Init dataloader for batch computation
-        x_t = data[:, :self.model.state_dim]
-        a_t = data[:, self.model.state_dim:self.model.state_dim + self.model.action_dim]
-        x_t1 = data[:, -self.model.state_dim:]
+        x_t = data[:, : self.model.state_dim]
+        a_t = data[
+            :, self.model.state_dim : self.model.state_dim + self.model.action_dim
+        ]
+        x_t1 = data[:, -self.model.state_dim :]
 
         # x_t_tensor = torch.from_numpy(x_t).float()
         # a_t_tensor = torch.from_numpy(a_t).float()
@@ -42,11 +48,15 @@ class EWC:
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
         # Init fisher matrix
-        fisher = {n: torch.zeros_like(p, device=self.device) for n, p in self.params.items()}
+        fisher = {
+            n: torch.zeros_like(p, device=self.device) for n, p in self.params.items()
+        }
         self.model.eval()
 
         # tqdm包装迭代器，加进度条
-        for x_t_batch, a_t_batch, x_t1_batch in tqdm(dataloader, desc="Computing Fisher"):
+        for x_t_batch, a_t_batch, x_t1_batch in tqdm(
+            dataloader, desc="Computing Fisher"
+        ):
             x_t_batch = x_t_batch.to(self.device)
             a_t_batch = a_t_batch.to(self.device)
             x_t1_batch = x_t1_batch.to(self.device)
@@ -79,10 +89,7 @@ class EWC:
         """
         os.makedirs(model_dir, exist_ok=True)
         save_path = os.path.join(model_dir, f"ewc_task{task_id}.pt")
-        torch.save({
-            "fisher_dict": self.fisher,
-            "params": self.params
-        }, save_path)
+        torch.save({"fisher_dict": self.fisher, "params": self.params}, save_path)
         print(f"[EWC] Saved fisher & params to {save_path}")
 
 
@@ -95,45 +102,53 @@ class Fisher_Analyzer:
     def load_fisher(self, file_path, task_id=None):
         self.ckpt = torch.load(file_path)
 
-        self.fisher_dict = self.ckpt.get('fisher_dict', {})
+        self.fisher_dict = self.ckpt.get("fisher_dict", {})
         print("[INFO] fisher_dict type:", type(self.fisher_dict))
         print("[INFO] fisher_dict length:", len(self.fisher_dict))
         print("[INFO] fisher_dict keys:", self.fisher_dict.keys())
 
-        if isinstance(self.fisher_dict, dict) and isinstance(list(self.fisher_dict.values())[0], dict):
-            self.fisher_dict = list(self.fisher_dict.values())[task_id-1]
+        if isinstance(self.fisher_dict, dict) and isinstance(
+            list(self.fisher_dict.values())[0], dict
+        ):
+            self.fisher_dict = list(self.fisher_dict.values())[task_id - 1]
 
     def preprocess_K(self):
-        self.off_diagonal = self.fisher_dict.get('_koopman_propagator.off_diagonal', None)
-        self.diagonal = self.fisher_dict.get('_koopman_propagator.diagonal', None)
+        self.off_diagonal = self.fisher_dict.get(
+            "_koopman_propagator.off_diagonal", None
+        )
+        self.diagonal = self.fisher_dict.get("_koopman_propagator.diagonal", None)
 
         if self.off_diagonal is None or self.diagonal is None:
-            print("Missing required Fisher matrices (_koopman_propagator.off_diagonal or _koopman_propagator.diagonal)")
+            print(
+                "Missing required Fisher matrices (_koopman_propagator.off_diagonal or _koopman_propagator.diagonal)"
+            )
             return None
-        
-        self.K_state_fisher = torch.diag(self.diagonal) + self.off_diagonal - self.off_diagonal.t()
-    
+
+        self.K_state_fisher = (
+            torch.diag(self.diagonal) + self.off_diagonal - self.off_diagonal.t()
+        )
+
     def summarize_fisher(self):
         print("\n[### Analyzing Structure - Fisher Matrix ###]")
         print(f"num of param matrix: {len(self.fisher_dict)}")
         for key in list(self.fisher_dict.keys()):
             print(f"- param name: {key}")
             print(f"  Fisher shape: {self.fisher_dict[key].shape}")
-    
-    def visualize_fisher(self, save_dir='models/ewc_0/figs', save_fig=False):
+
+    def visualize_fisher(self, save_dir="models/ewc_0/figs", save_fig=False):
         os.makedirs(save_dir, exist_ok=True)
-        print(f"\n[### Visualizing Fisher Matrix ###]")
-        
+        print("\n[### Visualizing Fisher Matrix ###]")
+
         for i, (key, fisher_tensor) in enumerate(self.fisher_dict.items()):
             # tackle with koopman state matrix
-            if key == '_koopman_propagator.off_diagonal':
+            if key == "_koopman_propagator.off_diagonal":
                 continue
-            elif key == '_koopman_propagator.diagonal':
+            elif key == "_koopman_propagator.diagonal":
                 self.preprocess_K()
                 fisher_tensor = self.K_state_fisher
-            
+
             fisher_cpu = fisher_tensor.detach().cpu().numpy()
-            
+
             # check dimension of fisher_cpu
             if fisher_cpu.ndim == 1:
                 fisher_cpu = fisher_cpu.reshape(1, -1)
@@ -143,31 +158,37 @@ class Fisher_Analyzer:
 
             # plot
             plt.figure(figsize=(6, 4))
-            im = plt.imshow(fisher_cpu, cmap='viridis', aspect='auto')
+            im = plt.imshow(fisher_cpu, cmap="viridis", aspect="auto")
             plt.colorbar(im)
             plt.title(f"Fisher: {key}")
             plt.tight_layout()
-            
+
             if save_fig:
-                file_name = os.path.join(save_dir, f"fisher_{i}_{key.replace('.', '_')}.png")
+                file_name = os.path.join(
+                    save_dir, f"fisher_{i}_{key.replace('.', '_')}.png"
+                )
                 plt.savefig(file_name)
                 plt.close()
                 print(f"- Saved to: {file_name}")
             else:
                 plt.show()
                 plt.close()
-    
-    def thresholded_visualize_fisher(self, threshold=100, save_dir='models/ewc_0/thresholded', save_fig=False):
-        print(f"\n[### Visualizing Thresholded Fisher Matrix (threshold={threshold}) ###]")
+
+    def thresholded_visualize_fisher(
+        self, threshold=100, save_dir="models/ewc_0/thresholded", save_fig=False
+    ):
+        print(
+            f"\n[### Visualizing Thresholded Fisher Matrix (threshold={threshold}) ###]"
+        )
 
         for i, (key, fisher_tensor) in enumerate(self.fisher_dict.items()):
             # tackle with koopman state matrix
-            if key == '_koopman_propagator.off_diagonal':
+            if key == "_koopman_propagator.off_diagonal":
                 continue
-            elif key == '_koopman_propagator.diagonal':
+            elif key == "_koopman_propagator.diagonal":
                 self.preprocess_K()
                 fisher_tensor = self.K_state_fisher
-            
+
             fisher_processed = fisher_tensor.clone()
             fisher_processed[fisher_processed >= threshold] = 100.0
             fisher_processed[fisher_processed < threshold] = 0.0
@@ -183,14 +204,16 @@ class Fisher_Analyzer:
 
             # plot
             plt.figure(figsize=(6, 4))
-            im = plt.imshow(fisher_cpu, cmap='viridis', aspect='auto')
+            im = plt.imshow(fisher_cpu, cmap="viridis", aspect="auto")
             plt.colorbar(im)
             plt.title(f"Thresholded Fisher: {key}")
             plt.tight_layout()
 
             if save_fig:
                 os.makedirs(save_dir, exist_ok=True)
-                file_name = os.path.join(save_dir, f"thres_fisher_{i}_{key.replace('.', '_')}.png")
+                file_name = os.path.join(
+                    save_dir, f"thres_fisher_{i}_{key.replace('.', '_')}.png"
+                )
                 plt.savefig(file_name)
                 plt.close()
                 print(f"- Saved to: {file_name}")
@@ -198,8 +221,18 @@ class Fisher_Analyzer:
                 plt.show()
                 plt.close()
 
-    def compare_all_fishers(self, file_path1, file_path2, task_id1=1, task_id2=2, save_dir='models/ewc_diff/figs', save_fig=False):
-        print(f"\n[### Comparing All Fisher Matrices from task {task_id1} and {task_id2} ###]")
+    def compare_all_fishers(
+        self,
+        file_path1,
+        file_path2,
+        task_id1=1,
+        task_id2=2,
+        save_dir="models/ewc_diff/figs",
+        save_fig=False,
+    ):
+        print(
+            f"\n[### Comparing All Fisher Matrices from task {task_id1} and {task_id2} ###]"
+        )
 
         # 加载两个任务的 Fisher 字典
         fisher1 = self._load_single_fisher(file_path1, task_id1)
@@ -213,13 +246,13 @@ class Fisher_Analyzer:
                 continue
 
             # 特殊处理 koopman 中的 K_state_fisher
-            if key == '_koopman_propagator.off_diagonal':
+            if key == "_koopman_propagator.off_diagonal":
                 continue
-            elif key == '_koopman_propagator.diagonal':
+            elif key == "_koopman_propagator.diagonal":
                 K1 = self._build_K_fisher(fisher1)
                 K2 = self._build_K_fisher(fisher2)
                 if K1 is None or K2 is None:
-                    print(f"[Warning] Missing Koopman matrix components, skipping...")
+                    print("[Warning] Missing Koopman matrix components, skipping...")
                     continue
                 diff_tensor = K1 - K2
             else:
@@ -239,7 +272,7 @@ class Fisher_Analyzer:
                 continue
 
             plt.figure(figsize=(6, 4))
-            im = plt.imshow(diff_cpu, cmap='bwr', aspect='auto')
+            im = plt.imshow(diff_cpu, cmap="bwr", aspect="auto")
             plt.colorbar(im)
             plt.title(f"Fisher Diff: {key}")
             plt.tight_layout()
@@ -261,9 +294,9 @@ class Fisher_Analyzer:
         above_threshold = 0
 
         for key, tensor in self.fisher_dict.items():
-            if key == '_koopman_propagator.off_diagonal':
+            if key == "_koopman_propagator.off_diagonal":
                 continue
-            elif key == '_koopman_propagator.diagonal':
+            elif key == "_koopman_propagator.diagonal":
                 if not include_matrix:
                     continue
                 self.preprocess_K()
@@ -277,9 +310,11 @@ class Fisher_Analyzer:
         if total_elements == 0:
             print("[Warning] No valid elements in Fisher matrix to compute ratio.")
             return 0.0
-        
+
         ratio = (above_threshold / total_elements) * 100
-        print(f"\n[INFO] Percentage of Fisher values above threshold {threshold}: {ratio:.2f}%\n")
+        print(
+            f"\n[INFO] Percentage of Fisher values above threshold {threshold}: {ratio:.2f}%\n"
+        )
 
     def get_layerwise_high_fisher_ratio(self, threshold):
         """
@@ -287,9 +322,9 @@ class Fisher_Analyzer:
         """
         print(f"[INFO] Layer-wise Fisher value ratio above threshold {threshold}:")
         for key, tensor in self.fisher_dict.items():
-            if key == '_koopman_propagator.off_diagonal':
+            if key == "_koopman_propagator.off_diagonal":
                 continue
-            elif key == '_koopman_propagator.diagonal':
+            elif key == "_koopman_propagator.diagonal":
                 self.preprocess_K()
                 tensor = self.K_state_fisher
 
@@ -298,18 +333,18 @@ class Fisher_Analyzer:
             ratio = (above / total) * 100 if total > 0 else 0.0
             print(f"  - {key:<40}: {ratio:.2f}% ({above}/{total})")
 
-
-
     def _load_single_fisher(self, file_path, task_id):
         ckpt = torch.load(file_path)
-        fisher_dict = ckpt.get('fisher_dict', {})
-        if isinstance(fisher_dict, dict) and isinstance(list(fisher_dict.values())[0], dict):
+        fisher_dict = ckpt.get("fisher_dict", {})
+        if isinstance(fisher_dict, dict) and isinstance(
+            list(fisher_dict.values())[0], dict
+        ):
             return list(fisher_dict.values())[task_id - 1]
         return fisher_dict
 
     def _build_K_fisher(self, fisher_dict):
-        off_diag = fisher_dict.get('_koopman_propagator.off_diagonal', None)
-        diag = fisher_dict.get('_koopman_propagator.diagonal', None)
+        off_diag = fisher_dict.get("_koopman_propagator.off_diagonal", None)
+        diag = fisher_dict.get("_koopman_propagator.diagonal", None)
         if off_diag is None or diag is None:
             return None
         return torch.diag(diag) + off_diag - off_diag.t()

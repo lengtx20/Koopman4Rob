@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import make_interp_spline
 
+
 def smooth_curve(x, y, points=300):
     x = np.array(x)
     y = np.array(y)
