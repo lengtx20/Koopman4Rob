@@ -1,13 +1,20 @@
 """This file provides a demo main scirpt for training with Deep Koopman and computing EWC weights"""
 
-import numpy as np
 import torch
+import os
+import numpy as np
 import torch.optim as optim
 from torch.nn import MSELoss
 from models.deep_koopman import Deep_Koopman
 from runner.koopman_runner import KoopmanRunner
 from data.load_pickle_data import load_pickle_data
-import os
+from airbot_data_collection.common.datasets.mcap_dataset import (
+    McapFlatbufferEpisodeDataset,
+    McapFlatbufferEpisodeDatasetConfig,
+    DataSlicesConfig,
+    DataRearrangeConfig,
+)
+from pathlib import Path
 
 
 def load_data(mode, data_path, ratio: int):
@@ -27,31 +34,55 @@ def load_data(mode, data_path, ratio: int):
     return train_data, val_data
 
 
-def run(mode="test", data_path=None, model_dir=None, fisher_path=None):
+def run(data_root: str, mode="train", model_dir=None, fisher_path=None):
     """
     mode:       select between train / test
-    data_path:  path to the npy file.
-                The structure of the data need to be (num_sample, x_t + a_t + x_t1).
+    data_root:  path to the data root.
     model_dir:  path to the Deep Koopman model.
                 The model will be save to (or load from) this dir when training (or testing).
     """
-    assert data_path is not None, "Invalid data path."
+    assert data_root is not None, "Invalid data path."
     assert model_dir is not None, "Model path must be specified."
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    print(f"[INFO] Loading Data from {data_path}")
+    print(f"[INFO] Loading Data from {data_root}")
+    number = len(list(Path(data_root).glob("*.mcap")))
+    train_end = int(number * 0.8)
+    print(f"[INFO] Found {number} mcap files in {data_root}")
 
-    train_data, val_data = load_data(mode, data_path, ratio=0.8)
+    dataset_slices = {
+        "train": (0, train_end),
+        "val": (train_end, number),
+    }
+    datasets = {}
+    for name, slices in dataset_slices.items():
+        dataset = McapFlatbufferEpisodeDataset(
+            McapFlatbufferEpisodeDatasetConfig(
+                data_root=data_root,
+                slices=DataSlicesConfig(dataset={data_root: slices}),
+                rearrange=DataRearrangeConfig(
+                    episode="sort",
+                ),
+                keys=[
+                    "/lead/arm/joint_state/position",
+                    "/lead/eef/joint_state/position",
+                    "/env_camera/color/image_raw",
+                    "/follow_camera/color/image_raw",
+                ],
+            )
+        )
+        dataset.load()
+        datasets[name] = dataset
 
     # ===== init model and alg ===== #
     loss_fn = MSELoss()
     model = Deep_Koopman(
         state_dim=7,
         action_dim=512 * 2,
-        hidden_sizes=[128] * 3,
+        hidden_sizes=[128] * 2,
         lifted_dim=128,
         seed=42,
     )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to_device(device)
     # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
     ewc = None
@@ -59,8 +90,8 @@ def run(mode="test", data_path=None, model_dir=None, fisher_path=None):
     runner = KoopmanRunner(
         model=model,
         ewc_model=ewc,
-        train_data=train_data,
-        val_data=val_data,
+        train_data=datasets["train"],
+        val_data=datasets["val"],
         optimizer=optimizer,
         loss_fn=loss_fn,
         device=device,
@@ -72,7 +103,7 @@ def run(mode="test", data_path=None, model_dir=None, fisher_path=None):
     if mode == "train":
         os.makedirs(os.path.dirname(model_dir) or ".", exist_ok=True)
         runner.train(
-            max_epochs=100000,
+            max_epochs=10,
             model_dir=model_dir,
             task_id=1,
             fisher_path=fisher_path,
@@ -90,7 +121,7 @@ def run(mode="test", data_path=None, model_dir=None, fisher_path=None):
 if __name__ == "__main__":
     run(
         mode="train",
-        data_path="data/open_drawer_20_demos_2025-07-09_21-48-22.pkl",
+        data_root="/home/ghz/Work/OpenGHz/data-collection/airbot-data-collection/airbot_data_collection/data/red_meat_0",
         model_dir="logs/test_1.0",
         # fisher_path="/home/ltx/Koopman4Rob/logs/test/ewc_task1.pt",
         fisher_path=None,

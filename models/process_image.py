@@ -88,7 +88,7 @@ class EncodeImage:
         image_tensor = image_tensor.unsqueeze(0)  # 添加批次维度
         return image_tensor.to(self.device, torch.float32)
 
-    def extract_features(self, image_tensor: torch.Tensor) -> np.ndarray:
+    def extract_features(self, image_tensor: torch.Tensor) -> torch.Tensor:
         """
         从图像张量中提取特征
 
@@ -96,13 +96,14 @@ class EncodeImage:
             image_tensor: 预处理后的图像张量
 
         Returns:
-            提取的特征数组
+            提取的特征
         """
         with torch.no_grad():
             # 模型输出 `features` 的形状是 `[B, 512, 1, 1]`（ResNet-34 的特征图）
             features = self.model(image_tensor)
-        features = features.view(features.size(0), -1)
-        return features.cpu().numpy()
+        # 将特征展平为 `[B, 512]`
+        # 这里的 `B` 是批次大小，通常为1
+        return features.view(features.size(0), -1)
 
     def encode_image(self, image_array: np.ndarray) -> np.ndarray:
         """

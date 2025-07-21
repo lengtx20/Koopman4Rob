@@ -6,6 +6,10 @@ import torch
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from utils.utils import smooth_curve
+from airbot_data_collection.common.datasets.mcap_dataset import (
+    McapFlatbufferEpisodeDataset,
+)
+from models.process_image import EncodeImage
 
 
 class KoopmanRunner:
@@ -13,8 +17,8 @@ class KoopmanRunner:
         self,
         model,
         ewc_model,
-        train_data,
-        val_data,
+        train_data: McapFlatbufferEpisodeDataset,
+        val_data: McapFlatbufferEpisodeDataset,
         optimizer,
         loss_fn,
         device,
@@ -28,13 +32,14 @@ class KoopmanRunner:
         """
         self.model = model
         self.ewc_model = ewc_model
-        self.train_data = train_data
-        self.val_data = val_data
+        self.train_dataset = train_data
+        self.val_dataset = val_data
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.device = device
         self.normalize = normalize
         self.ewc_lambda = ewc_lambda
+        self.image_encoder = EncodeImage(device=device)
 
         if self.normalize:
             self.state_mean = np.array(
@@ -47,23 +52,36 @@ class KoopmanRunner:
             self.mean = None
             self.std = None
 
-    def _process_batch(self, data, i):
+    def _process_batch(self, sample, last_sample):
         """
         Split data into x_t, a_t, x_t1. Single sample at a time.
         If self.normalize = True, then sample retured will be normalized.
         """
-        sample = data[i]
-        x_t = sample[: self.model.state_dim]
-        a_t = sample[
-            self.model.state_dim : self.model.state_dim + self.model.action_dim
-        ]
-        x_t1 = sample[-self.model.state_dim :]
+        x_t = np.hstack(
+            [
+                last_sample[f"/lead/{comp}/joint_state/position"]
+                for comp in ["arm", "eef"]
+            ]
+        )
+        a_t = torch.hstack(
+            [
+                self.image_encoder.encode_image(
+                    last_sample[f"/{cam_name}/color/image_raw"]
+                ).squeeze(0)
+                for cam_name in ["env_camera", "follow_camera"]
+            ]
+        )
+        # print("********", x_t.shape, a_t.shape)
+        x_t1 = np.hstack(
+            [sample[f"/lead/{comp}/joint_state/position"] for comp in ["arm", "eef"]]
+        )
         if self.normalize:
             x_t = (x_t - self.state_mean) / self.state_std
             a_t = (a_t - self.action_mean) / self.action_std
             x_t1 = (x_t1 - self.state_mean) / self.state_std
         x_t = torch.tensor(x_t, dtype=torch.float32).to(self.device).unsqueeze(0)
-        a_t = torch.tensor(a_t, dtype=torch.float32).to(self.device).unsqueeze(0)
+        # a_t = torch.tensor(a_t, dtype=torch.float32).to(self.device).unsqueeze(0)
+        a_t = a_t.to(self.device).unsqueeze(0)
         x_t1 = torch.tensor(x_t1, dtype=torch.float32).to(self.device).unsqueeze(0)
         return x_t, a_t, x_t1
 
@@ -86,22 +104,26 @@ class KoopmanRunner:
 
         return np.concatenate((x_t, a_t, x_t1, pred_x_t1))
 
-    def _evaluate_loss(self, data):
+    def _evaluate_loss(self, dataset):
         """
         Compute the prediction loss by: loss = loss_fn (pred_x_t1, x_t1)
         """
-        if data is None:
+        if dataset is None:
             return None
 
         self.model.eval()
         total_loss = 0
+        length = len(dataset)
         with torch.no_grad():
-            for i in range(data.shape[0]):
-                x_t, a_t, x_t1 = self._process_batch(data, i)
-                pred_x_t1 = self.model(x_t, a_t, False)
-                loss = self.loss_fn(pred_x_t1, x_t1)
-                total_loss += loss.item()
-        return total_loss / data.shape[0]
+            for episode in dataset:
+                episode_iter = iter(episode)
+                last_sample = next(episode_iter)
+                for sample in episode_iter:
+                    x_t, a_t, x_t1 = self._process_batch(sample, last_sample)
+                    pred_x_t1 = self.model(x_t, a_t, False)
+                    loss = self.loss_fn(pred_x_t1, x_t1)
+                    total_loss += loss.item()
+        return total_loss / length
 
     def load_fisher(self, fisher_path, task_id=1):
         self.ckpt = torch.load(fisher_path)
@@ -245,32 +267,39 @@ class KoopmanRunner:
         epoch_bar = tqdm(range(max_epochs), desc="[Training]", position=0)
         for epoch in epoch_bar:
             total_loss = 0
-
             pbar = tqdm(
-                range(self.train_data.shape[0]),
                 desc=f"[Train] Epoch {epoch + 1}/{max_epochs}",
                 leave=False,
+                total=len(self.train_dataset),
             )
             # self.register_gradient_masks(threshold_mode=threshold_mode, ewc_threshold=ewc_threshold)
+            for episode in self.train_dataset:
+                episode_iter = iter(episode)
+                last_sample = next(episode_iter)
+                for sample in episode_iter:
+                    pbar.update(1)
+                    x_t, a_t, x_t1 = self._process_batch(sample, last_sample)
+                    last_sample = sample
+                    self.optimizer.zero_grad()
+                    pred_x_t1 = self.model(x_t, a_t, False)
+                    assert pred_x_t1.shape == x_t1.shape, (
+                        f"Shape mismatch: pred_x_t1 {pred_x_t1.shape}, x_t1 {x_t1.shape}"
+                    )
+                    loss = self.loss_fn(pred_x_t1, x_t1)
+                    if ewc_regularization:
+                        if (
+                            self.ewc_model is not None
+                            and self.ewc_model.fisher is not None
+                        ):
+                            loss += self.ewc_lambda * self.ewc_model.penalty(self.model)
+                    # register mask to disable partial params
 
-            for i in pbar:
-                # for i in range(self.train_data.shape[0]):
-                x_t, a_t, x_t1 = self._process_batch(self.train_data, i)
+                    loss.backward()
+                    self.optimizer.step()
+                    total_loss += loss.item()
 
-                self.optimizer.zero_grad()
-                pred_x_t1 = self.model(x_t, a_t, False)
-                loss = self.loss_fn(pred_x_t1, x_t1)
-                if ewc_regularization:
-                    if self.ewc_model is not None and self.ewc_model.fisher is not None:
-                        loss += self.ewc_lambda * self.ewc_model.penalty(self.model)
-                # register mask to disable partial params
-
-                loss.backward()
-                self.optimizer.step()
-                total_loss += loss.item()
-
-            train_loss = total_loss / self.train_data.shape[0]
-            val_loss = self._evaluate_loss(self.val_data)
+            train_loss = total_loss / len(self.train_dataset)
+            val_loss = self._evaluate_loss(self.val_dataset)
 
             if val_loss is not None:
                 epoch_bar.set_postfix(
@@ -308,7 +337,7 @@ class KoopmanRunner:
         # compute fisher after training and save fisher info
         print("[INFO] Computing Fisher Information after training...")
         if self.ewc_model is not None:
-            train_tensor = torch.tensor(self.train_data, dtype=torch.float32).to(
+            train_tensor = torch.tensor(self.train_dataset, dtype=torch.float32).to(
                 self.device
             )
             fisher = self.ewc_model.compute_fisher(train_tensor, batch_size=64)
@@ -329,8 +358,8 @@ class KoopmanRunner:
         self.traj = []
         total_loss = 0
         with torch.no_grad():
-            for i in range(self.train_data.shape[0]):
-                x_t, a_t, x_t1 = self._process_batch(self.train_data, i)
+            for i in range(self.train_dataset.shape[0]):
+                x_t, a_t, x_t1 = self._process_batch(self.train_dataset, i)
                 pred_x_t1 = self.model(x_t, a_t, False)
                 loss = self.loss_fn(pred_x_t1, x_t1)
                 total_loss += loss.item()
@@ -362,7 +391,7 @@ class KoopmanRunner:
                 )
                 self.traj.append(traj_item)
 
-        self.average_loss = total_loss / self.train_data.shape[0]
+        self.average_loss = total_loss / self.train_dataset.shape[0]
         self.traj_np = np.array(self.traj)
         print(f"[Validate] Avg Loss: {self.average_loss:.4f}")
         if show_plot:

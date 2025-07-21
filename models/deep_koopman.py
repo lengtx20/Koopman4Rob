@@ -209,15 +209,19 @@ class Deep_Koopman(nn.Module):
 
     def linear_dynamics(self, z: torch.Tensor, u: torch.Tensor):
         """z -> z_next = A * z + B * u"""
-        return self.A @ z.T + self.B @ u.T
+        # print(self.A.shape, z.shape, self.B.shape, u.shape)
+        # return self.A @ z.T + self.B @ u.T
+        return z @ self.A.T + u @ self.B.T
 
     def forward(
         self, x: torch.Tensor, u: torch.Tensor, get_action: bool = False
     ) -> torch.Tensor:
         """Predict next state: x -> z -> z_next -> x_next"""
         z = self.encode(x)
-        # print(z.shape, u.shape)
         z_next = self.linear_dynamics(z, u)
+        assert z_next.shape == z.shape, (
+            f"Shape mismatch: z_next {z_next.shape}, z {z.shape}"
+        )
         return self.decode(z_next, get_action)
 
     def freeze_matrix(self):
