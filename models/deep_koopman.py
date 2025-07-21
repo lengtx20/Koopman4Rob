@@ -209,7 +209,8 @@ class Deep_Koopman(nn.Module):
 
     def linear_dynamics(self, z: torch.Tensor, u: torch.Tensor):
         """z -> z_next = A * z + B * u"""
-        return self.A @ z.T + self.B @ u.T
+        # return self.A @ z.T + self.B @ u.T
+        return z @ self.A.T + u @ self.B.T
 
     def forward(
         self, x: torch.Tensor, u: torch.Tensor, get_action: bool = False
