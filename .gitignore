@@ -6,10 +6,6 @@ __pycache__/
 # 日志文件
 *.logs/
 
-# 数据
-*.data/
-
-
 # 虚拟环境
 venv/
 env/

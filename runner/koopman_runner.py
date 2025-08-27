@@ -4,30 +4,50 @@ import os
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import datetime
 from tqdm import tqdm
 from utils.utils import smooth_curve
+from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader, Dataset
 
+class KoopmanDataset(Dataset):
+    def __init__(self, data):
+        self.data = torch.tensor(data, dtype=torch.float32)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
 
 class KoopmanRunner:
     def __init__(
         self,
         model,
         ewc_model,
+        state_dim,
+        action_dim,
         train_data,
         val_data,
         optimizer,
         loss_fn,
         device,
         normalize=False,
+        batch_size=64,
+        num_workers=0,
         ewc_lambda=0.0,
+        tb_log_dir='logs/tensorboard',
     ):
         """
         model:      Deep Koopman model
         normalize:  Current normalization relies on pre-defined mean and std value.
                     This is to assure the consistency of the model.
         """
-        self.model = model
+        # params
+        self.model = model.to(device)
         self.ewc_model = ewc_model
+        self.state_dim = state_dim
+        self.action_dim = action_dim
         self.train_data = train_data
         self.val_data = val_data
         self.optimizer = optimizer
@@ -35,7 +55,19 @@ class KoopmanRunner:
         self.device = device
         self.normalize = normalize
         self.ewc_lambda = ewc_lambda
+        self.num_workers = num_workers
+        self.tb_log_dir = tb_log_dir
 
+        self.losses = []
+        self.vales = []
+
+        # dataset
+        self.train_loader = DataLoader(
+            KoopmanDataset(train_data), batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        self.val_loader = DataLoader(
+            KoopmanDataset(val_data), batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+        # normalization (TODO)
         if self.normalize:
             self.state_mean = np.array(
                 [-1.27054915, 0.94617132, -0.32996104, 5.84603260]
@@ -241,57 +273,78 @@ class KoopmanRunner:
             self.fisher_dict = None
             self.load_fisher(fisher_path=fisher_path)
 
-        # training step
+        # tensorboard
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.tb_log_dir = os.path.join(self.tb_log_dir, f"{timestamp}")
+        self.writer = SummaryWriter(log_dir=self.tb_log_dir)
+        print(f"[INFO] TensorBoard logs will be saved to {self.tb_log_dir}")
+
         epoch_bar = tqdm(range(max_epochs), desc="[Training]", position=0)
         for epoch in epoch_bar:
+            # ----- training step -----
             total_loss = 0
-
-            pbar = tqdm(
-                range(self.train_data.shape[0]),
-                desc=f"[Train] Epoch {epoch + 1}/{max_epochs}",
-                leave=False,
-            )
-            # self.register_gradient_masks(threshold_mode=threshold_mode, ewc_threshold=ewc_threshold)
-
-            for i in pbar:
-                # for i in range(self.train_data.shape[0]):
-                x_t, a_t, x_t1 = self._process_batch(self.train_data, i)
-
+            self.model.train()
+            for batch in self.train_loader:
+                batch = batch.to(self.device)
+                x_t = batch[:, :self.state_dim]
+                a_t = batch[:, self.state_dim:self.state_dim + self.action_dim]
+                x_t1 = batch[:, -self.state_dim:]
+            
                 self.optimizer.zero_grad()
                 pred_x_t1 = self.model(x_t, a_t, False)
                 loss = self.loss_fn(pred_x_t1, x_t1)
+
                 if ewc_regularization:
                     if self.ewc_model is not None and self.ewc_model.fisher is not None:
                         loss += self.ewc_lambda * self.ewc_model.penalty(self.model)
-                # register mask to disable partial params
 
                 loss.backward()
                 self.optimizer.step()
-                total_loss += loss.item()
+                total_loss += loss.item() * batch.size(0)
 
             train_loss = total_loss / self.train_data.shape[0]
-            val_loss = self._evaluate_loss(self.val_data)
+            
+            # ----- validation step -----
+            if self.val_data is None:
+                val_loss = None
+            else:
+                self.model.eval()
+                val_loss = 0
+                with torch.no_grad():
+                    for batch in self.val_loader:
+                        batch = batch.to(self.device)
+                        x_t = batch[:, :self.state_dim]
+                        a_t = batch[:, self.state_dim:self.state_dim + self.action_dim]
+                        x_t1 = batch[:, -self.state_dim:]
 
+                        pred_x_t1 = self.model(x_t, a_t, False)
+                        loss = self.loss_fn(pred_x_t1, x_t1)
+                        val_loss += loss.item() * batch.size(0)
+
+                val_loss /= self.val_data.shape[0]
+            
+            self.losses.append(train_loss)
+            self.vales.append(val_loss)
+
+            # ----- TensorBoard -----
+            self.writer.add_scalar("Loss/Train", train_loss, epoch)
             if val_loss is not None:
-                epoch_bar.set_postfix(
-                    {
-                        "Epoch": epoch + 1,
-                        "TrainLoss": f"{train_loss:.4f}",
-                        "ValLoss": f"{val_loss:.4f}",
-                    }
-                )
+                self.writer.add_scalar("Loss/Val", val_loss, epoch)
+            for i, param_group in enumerate(self.optimizer.param_groups):
+                self.writer.add_scalar(f"LR/Group{i}", param_group["lr"], epoch)
+
+            # ----- tqdm postfix -----
+            postfix = {"TrainLoss": f"{train_loss:.4f}"}
+            if val_loss is not None:
+                postfix["ValLoss"] = f"{val_loss:.4f}"
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    print(
-                        f"[Epoch {epoch + 1}] Validation loss improved to {val_loss:.4f}."
-                    )
-            else:
-                epoch_bar.set_postfix({"TrainLoss": f"{train_loss:.4f}"})
-                print(
-                    f"[Epoch {epoch + 1}] Train Loss: {train_loss:.4f} (no validation)"
-                )
+                    tqdm.write(f"[INFO] Epoch {epoch + 1}: Validation loss improved to {val_loss:.4f}")
+            epoch_bar.set_postfix(postfix)
 
-        # save model
+        self.writer.close()
+
+        # ----- save models and losses & vales -----
         if save_model and model_dir is not None:
             os.makedirs(model_dir, exist_ok=True)
             self.model.save(model_dir=model_dir)
@@ -304,8 +357,13 @@ class KoopmanRunner:
             print(f"[Runner] Model saved to {model_dir}")
         else:
             print("[INFO] No Koopman model saved")
+        
+        if save_model and model_dir is not None:
+            np.save(os.path.join(model_dir, "losses.npy"), self.losses)
+            np.save(os.path.join(model_dir, "vales.npy"), self.vales)
+            print(f"[Runner] Losses and vales saved to {model_dir}")
 
-        # compute fisher after training and save fisher info
+        # ----- compute fisher and save fisher info -----
         print("[INFO] Computing Fisher Information after training...")
         if self.ewc_model is not None:
             train_tensor = torch.tensor(self.train_data, dtype=torch.float32).to(
@@ -319,102 +377,126 @@ class KoopmanRunner:
         else:
             print("[INFO] No EWC model attached or invalid.")
 
-    def test(self, model_dir=None, show_plot=True):
+    def test(
+        self,
+        dataset="val",
+        model_dir=None,
+        show_plot=True,
+        save_results=True,
+        rollout_steps=1,
+    ):
         """
-        Called by 'test' mode.
-        If show_plot is true, some visualization of the data trajectory will be shown.
+        Test model on given dataset (train/val).
+        Args:
+            dataset: str, "train" or "val"
+            model_dir: str, path to load model
+            show_plot: bool, whether to visualize trajectories
+            save_results: bool, whether to save trajectory and metrics
+            rollout_steps: int, number of steps for rollout prediction (>=1)
         """
-        self.model.load(model_dir=model_dir)
+        # ----- load model -----
+        if model_dir is not None:
+            self.model.load(model_dir=model_dir)
         self.model.eval()
-        self.traj = []
-        total_loss = 0
+
+        # ----- select dataset -----
+        if dataset == "train":
+            loader = self.train_loader
+        elif dataset == "val":
+            loader = self.val_loader
+        else:
+            raise ValueError("dataset must be 'train' or 'val'")
+        
+        traj = []
+        total_loss, total_mae = 0, 0
+        n_samples = 0
+
         with torch.no_grad():
-            for i in range(self.train_data.shape[0]):
-                x_t, a_t, x_t1 = self._process_batch(self.train_data, i)
-                pred_x_t1 = self.model(x_t, a_t, False)
+            for batch in loader:
+                batch = batch.to(self.device)
+                x_t = batch[:, :self.state_dim]
+                a_t = batch[:, self.state_dim:self.state_dim + self.action_dim]
+                x_t1 = batch[:, -self.state_dim:]
+
+                # ----- 单步 or 多步预测 -----
+                if rollout_steps == 1:
+                    pred_x_t1 = self.model(x_t, a_t, False)
+                else:
+                    # rollout N 步，输入是当前 state，动作来自数据
+                    pred_x_t1 = []
+                    cur_x = x_t
+                    for step in range(rollout_steps):
+                        cur_a = batch[:, self.state_dim:self.state_dim + self.action_dim]
+                        cur_x = self.model(cur_x, cur_a, False)
+                        pred_x_t1.append(cur_x)
+                    pred_x_t1 = pred_x_t1[-1]  # 取最后一步预测
+
+                # ----- loss & metrics -----
                 loss = self.loss_fn(pred_x_t1, x_t1)
-                total_loss += loss.item()
+                total_loss += loss.item() * batch.size(0)
+                total_mae += torch.mean(torch.abs(pred_x_t1 - x_t1)).item() * batch.size(0)
+                n_samples += batch.size(0)
 
-                x_t_np = x_t.squeeze(0).cpu().numpy()
-                a_t_np = a_t.squeeze(0).cpu().numpy()
-                x_t1_np = x_t1.squeeze(0).cpu().numpy()
-                pred_x_t1_np = pred_x_t1.squeeze(0).cpu().numpy()
-
-                if self.normalize:
-                    combined = np.concatenate(
-                        (x_t_np, a_t_np, x_t1_np, pred_x_t1_np), axis=-1
-                    )
-                    denorm = self._denormalize(combined)
-                    x_t_np = denorm[: self.model.state_dim]
-                    a_t_np = denorm[
-                        self.model.state_dim : self.model.state_dim
-                        + self.model.action_dim
-                    ]
-                    x_t1_np = denorm[
-                        self.model.state_dim
-                        + self.model.action_dim : self.model.state_dim * 2
-                        + self.model.action_dim
-                    ]
-                    pred_x_t1_np = denorm[-self.model.state_dim :]
-
-                traj_item = np.concatenate(
-                    (x_t_np, a_t_np, x_t1_np, pred_x_t1_np), axis=-1
+                # ----- 保存轨迹 -----
+                traj.append(
+                    torch.cat([x_t.cpu(), a_t.cpu(), x_t1.cpu(), pred_x_t1.cpu()], dim=1).numpy()
                 )
-                self.traj.append(traj_item)
 
-        self.average_loss = total_loss / self.train_data.shape[0]
-        self.traj_np = np.array(self.traj)
-        print(f"[Validate] Avg Loss: {self.average_loss:.4f}")
+        # ----- 结果统计 -----
+        avg_loss = total_loss / n_samples
+        avg_mae = total_mae / n_samples
+        self.traj_np = np.concatenate(traj, axis=0)
+        print("[INFO] Trajectory shape:", self.traj_np.shape)
+
+        print(f"[Test-{dataset}] Avg Loss: {avg_loss:.4f}, Avg MAE: {avg_mae:.4f}")
+
+        # ----- 保存结果 -----
+        if save_results and model_dir is not None:
+            np.save(os.path.join(model_dir, f"{dataset}_traj.npy"), self.traj_np)
+            with open(os.path.join(model_dir, f"{dataset}_metrics.txt"), "w") as f:
+                f.write(f"Avg Loss: {avg_loss}\nAvg MAE: {avg_mae}\n")
+            print(f"[Test-{dataset}] Results saved to {model_dir}")
+
+        # ----- 可视化 -----
         if show_plot:
             self.plot_trajectory()
 
     def plot_trajectory(self, use_smooth=True):
         """
-        If use_smooth, traj is smoothed using function 'smooth_curve' by doing interpolation.
-        This function needs to be modified by user.
+        绘制每个状态变量随时间的轨迹（真实 vs 预测）。
+        x 轴为时间步，y 轴为状态值。
         """
-        x_t = self.traj_np[:, : self.model.state_dim]
-        pred_x_t1 = self.traj_np[:, -self.model.state_dim :]
+        x_t = self.traj_np[:, : self.model.state_dim]        # True states
+        pred_x_t1 = self.traj_np[:, -self.model.state_dim :] # Predicted states
 
-        assert self.model.state_dim >= 4, "state_dim 至少为 4，才能绘制两个二维平面轨迹"
+        print("[DEBUG] x_t shape:", x_t.shape)
+        print("[DEBUG] pred_x_t1 shape:", pred_x_t1.shape)
+        time_idx = np.arange(len(x_t))
+        num_dims = self.model.state_dim
+        ncols = min(2, num_dims)  # 每行最多 2 个
+        nrows = (num_dims + ncols - 1) // ncols
 
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=(6 * ncols, 3 * nrows))
 
-        # Plot for dim 0 & 1
-        plt.subplot(1, 2, 1)
-        if use_smooth:
-            x_s, y_s = smooth_curve(x_t[:, 0], x_t[:, 1])
-            x_p, y_p = smooth_curve(pred_x_t1[:, 0], pred_x_t1[:, 1])
-        else:
-            x_s, y_s = x_t[:, 0], x_t[:, 1]
-            x_p, y_p = pred_x_t1[:, 0], pred_x_t1[:, 1]
-        plt.plot(x_s, y_s, label="True Traj", color="blue")
-        plt.plot(x_p, y_p, label="Predicted Traj", color="orange")
-        plt.scatter(x_t[:, 0], x_t[:, 1], color="blue", s=10, alpha=0.3)
-        plt.scatter(pred_x_t1[:, 0], pred_x_t1[:, 1], color="orange", s=10, alpha=0.3)
-        plt.title("State[0] vs State[1]")
-        plt.xlabel("State 0")
-        plt.ylabel("State 1")
-        plt.legend()
-        plt.axis("equal")
+        for i in range(num_dims):
+            ax = plt.subplot(nrows, ncols, i + 1)
 
-        # Plot for dim 2 & 3
-        plt.subplot(1, 2, 2)
-        if use_smooth:
-            x_s, y_s = smooth_curve(x_t[:, 2], x_t[:, 3])
-            x_p, y_p = smooth_curve(pred_x_t1[:, 2], pred_x_t1[:, 3])
-        else:
-            x_s, y_s = x_t[:, 2], x_t[:, 3]
-            x_p, y_p = pred_x_t1[:, 2], pred_x_t1[:, 3]
-        plt.plot(x_s, y_s, label="True Traj", color="blue")
-        plt.plot(x_p, y_p, label="Predicted Traj", color="orange")
-        plt.scatter(x_t[:, 2], x_t[:, 3], color="blue", s=10, alpha=0.3)
-        plt.scatter(pred_x_t1[:, 2], pred_x_t1[:, 3], color="orange", s=10, alpha=0.3)
-        plt.title("State[2] vs State[3]")
-        plt.xlabel("State 2")
-        plt.ylabel("State 3")
-        plt.legend()
-        plt.axis("equal")
+            if use_smooth:
+                t_s, y_s = smooth_curve(time_idx, x_t[:, i])
+                t_p, y_p = smooth_curve(time_idx, pred_x_t1[:, i])
+            else:
+                t_s, y_s = time_idx, x_t[:, i]
+                t_p, y_p = time_idx, pred_x_t1[:, i]
+
+            ax.plot(t_s, y_s, label="True", color="blue")
+            ax.plot(t_p, y_p, label="Pred", color="orange")
+            ax.scatter(time_idx, x_t[:, i], color="blue", s=8, alpha=0.3)
+            ax.scatter(time_idx, pred_x_t1[:, i], color="orange", s=8, alpha=0.3)
+
+            ax.set_title(f"State[{i}] over Time")
+            ax.set_xlabel("Time step")
+            ax.set_ylabel(f"State {i}")
+            ax.legend()
 
         plt.tight_layout()
         plt.show()

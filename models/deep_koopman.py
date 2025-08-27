@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: F401
 
-
 def get_activation(name: str):
     return {
         "relu": nn.ReLU(),
@@ -17,7 +16,6 @@ def get_activation(name: str):
         "mish": nn.Mish(),
         "linear": nn.Identity(),
     }[name]
-
 
 class Encoder(nn.Module):
     def __init__(
@@ -217,7 +215,6 @@ class Deep_Koopman(nn.Module):
     ) -> torch.Tensor:
         """Predict next state: x -> z -> z_next -> x_next"""
         z = self.encode(x)
-        # print(z.shape, u.shape)
         z_next = self.linear_dynamics(z, u)
         return self.decode(z_next, get_action)
 
@@ -232,15 +229,17 @@ class Deep_Koopman(nn.Module):
 
     def save(self, model_dir):
         torch.save(self.encoder.state_dict(), f"{model_dir}/encoder.pth")
-        torch.save(self.decoder.state_dict(), f"{model_dir}/decoder.pth")
         torch.save(self.A.data, f"{model_dir}/A.pth")
         torch.save(self.B.data, f"{model_dir}/B.pth")
+        if not self.iden_decoder:
+            torch.save(self.decoder.state_dict(), f"{model_dir}/decoder.pth")
 
     def load(self, model_dir):
         self.encoder.load_state_dict(torch.load(f"{model_dir}/encoder.pth"))
-        self.decoder.load_state_dict(torch.load(f"{model_dir}/decoder.pth"))
         self.A.data = torch.load(f"{model_dir}/A.pth")
         self.B.data = torch.load(f"{model_dir}/B.pth")
+        if not self.iden_decoder:
+            self.decoder.load_state_dict(torch.load(f"{model_dir}/decoder.pth"))
 
     def __repr__(self):
         return (
