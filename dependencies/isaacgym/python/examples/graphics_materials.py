@@ -14,20 +14,27 @@ Assimp Loading
   override materials specified in asset files with mesh textures/materials
 """
 
-import math
-import numpy as np
 from isaacgym import gymapi, gymutil
 
 
 class AssetDesc:
-    def __init__(self, file_name, flip_visual_attachments=False, mesh_normal_mode=gymapi.FROM_ASSET):
+    def __init__(
+        self,
+        file_name,
+        flip_visual_attachments=False,
+        mesh_normal_mode=gymapi.FROM_ASSET,
+    ):
         self.file_name = file_name
         self.flip_visual_attachments = flip_visual_attachments
         self.mesh_normal_mode = mesh_normal_mode
 
 
 asset_descriptors = [
-    AssetDesc("urdf/ycb/010_potted_meat_can/010_potted_meat_can.urdf", False, gymapi.COMPUTE_PER_VERTEX),
+    AssetDesc(
+        "urdf/ycb/010_potted_meat_can/010_potted_meat_can.urdf",
+        False,
+        gymapi.COMPUTE_PER_VERTEX,
+    ),
     AssetDesc("mjcf/open_ai_assets/hand/shadow_hand.xml", False),
     AssetDesc("urdf/sektion_cabinet_model/urdf/sektion_cabinet.urdf", False),
     AssetDesc("urdf/franka_description/robots/franka_panda.urdf", True),
@@ -58,7 +65,9 @@ sim_params.use_gpu_pipeline = False
 if args.use_gpu_pipeline:
     print("WARNING: Forcing CPU pipeline.")
 
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 
 # add ground plane
 plane_params = gymapi.PlaneParams()

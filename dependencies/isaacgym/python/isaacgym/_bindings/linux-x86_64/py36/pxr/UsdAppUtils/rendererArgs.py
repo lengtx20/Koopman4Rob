@@ -22,6 +22,7 @@
 # language governing permissions and limitations under the Apache License.
 #
 
+
 class RendererPlugins(object):
     """
     An enum-like container of the available Hydra renderer plugins.
@@ -53,11 +54,15 @@ class RendererPlugins(object):
         """
         Get a tuple of all available renderer plugins.
         """
-        if not hasattr(cls, '_allPlugins'):
+        if not hasattr(cls, "_allPlugins"):
             from pxr import UsdImagingGL
-            cls._allPlugins = tuple(cls._RendererPlugin(pluginId,
-                    UsdImagingGL.Engine.GetRendererDisplayName(pluginId))
-                for pluginId in UsdImagingGL.Engine.GetRendererPlugins())
+
+            cls._allPlugins = tuple(
+                cls._RendererPlugin(
+                    pluginId, UsdImagingGL.Engine.GetRendererDisplayName(pluginId)
+                )
+                for pluginId in UsdImagingGL.Engine.GetRendererPlugins()
+            )
 
         return cls._allPlugins
 
@@ -76,27 +81,34 @@ class RendererPlugins(object):
         """
         Get a renderer plugin from its display name.
         """
-        matches = [plugin for plugin in cls.allPlugins() if plugin.displayName == displayName]
+        matches = [
+            plugin for plugin in cls.allPlugins() if plugin.displayName == displayName
+        ]
         if len(matches) == 0:
-            raise ValueError("No renderer plugin with display name '{}'".format(displayName))
+            raise ValueError(
+                "No renderer plugin with display name '{}'".format(displayName)
+            )
         return matches[0]
 
-def AddCmdlineArgs(argsParser, altHelpText=''):
+
+def AddCmdlineArgs(argsParser, altHelpText=""):
     """
     Adds Hydra renderer-related command line arguments to argsParser.
 
     The resulting 'rendererPlugin' argument will be a _RendererPlugin instance
     representing one of the available Hydra renderer plugins.
     """
-    from pxr import UsdImagingGL
 
     helpText = altHelpText
     if not helpText:
-        helpText = (
-            'Hydra renderer plugin to use when generating images')
+        helpText = "Hydra renderer plugin to use when generating images"
 
-    argsParser.add_argument('--renderer', '-r', action='store',
+    argsParser.add_argument(
+        "--renderer",
+        "-r",
+        action="store",
         type=RendererPlugins.fromDisplayName,
-        dest='rendererPlugin',
+        dest="rendererPlugin",
         choices=[p for p in RendererPlugins.allPlugins()],
-        help=helpText)
+        help=helpText,
+    )

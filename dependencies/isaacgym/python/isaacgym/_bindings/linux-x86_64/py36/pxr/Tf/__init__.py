@@ -25,23 +25,23 @@
 Tf -- Tools Foundation
 """
 
+
 def PrepareModule(module, result):
     """PrepareModule(module, result) -- Prepare an extension module at import
     time.  Generally, this should only be called by the __init__.py script for a
     module upon loading a boost python module (generally '_LibName.so')."""
     # inject into result.
-    ignore = frozenset(['__name__', '__builtins__',
-                        '__doc__', '__file__', '__path__'])
-    newModuleName = result.get('__name__')
+    ignore = frozenset(["__name__", "__builtins__", "__doc__", "__file__", "__path__"])
+    newModuleName = result.get("__name__")
 
     for key, value in list(module.__dict__.items()):
-        if not key in ignore:
+        if key not in ignore:
             result[key] = value
 
             # Lie about the module from which value came.
-            if newModuleName and hasattr(value, '__module__'):
+            if newModuleName and hasattr(value, "__module__"):
                 try:
-                    setattr(value, '__module__', newModuleName)
+                    setattr(value, "__module__", newModuleName)
                 except AttributeError as e:
                     # The __module__ attribute of Boost.Python.function
                     # objects is not writable, so we get this exception
@@ -49,6 +49,7 @@ def PrepareModule(module, result):
                     # about the data objects like enum values and such.
                     #
                     pass
+
 
 def GetCodeLocation(framesUp):
     """Returns a tuple (moduleName, functionName, fileName, lineNo).
@@ -58,7 +59,7 @@ def GetCodeLocation(framesUp):
 
         info = GetCodeLocation()
 
-    will return information about the line that GetCodeLocation() was called 
+    will return information about the line that GetCodeLocation() was called
     from. One can write:
 
         def genericDebugFacility():
@@ -71,21 +72,30 @@ def GetCodeLocation(framesUp):
             if bad:
                 genericDebugFacility()
 
-    and genericDebugFacility() will get information associated with its caller, 
+    and genericDebugFacility() will get information associated with its caller,
     i.e. the function someCode()."""
     import inspect
+
     f_back = inspect.currentframe(framesUp).f_back
-    return (f_back.f_globals['__name__'], f_back.f_code.co_name,
-            f_back.f_code.co_filename, f_back.f_lineno)
+    return (
+        f_back.f_globals["__name__"],
+        f_back.f_code.co_name,
+        f_back.f_code.co_filename,
+        f_back.f_lineno,
+    )
+
 
 # for some strange reason, this errors out when we try to reload it,
 # which is odd since _tf is a DSO and can't be reloaded anyway:
 import sys
+
 if "pxr.Tf._tf" not in sys.modules:
     from . import _tf
+
     PrepareModule(_tf, locals())
     del _tf
 del sys
+
 
 # Need to provide an exception type that tf errors will show up as.
 class ErrorException(RuntimeError):
@@ -94,15 +104,19 @@ class ErrorException(RuntimeError):
         self.__TfException = True
 
     def __str__(self):
-        return '\n\t' + '\n\t'.join([str(e) for e in self.args])
+        return "\n\t" + "\n\t".join([str(e) for e in self.args])
+
+
 __SetErrorExceptionClass(ErrorException)
 
 try:
     from . import __DOC
+
     __DOC.Execute(locals())
     del __DOC
 except Exception:
     pass
+
 
 def Warn(msg, template=""):
     """Issue a warning via the TfDiagnostic system.
@@ -111,7 +125,8 @@ def Warn(msg, template=""):
     """
     codeInfo = GetCodeLocation(framesUp=1)
     _Warn(msg, codeInfo[0], codeInfo[1], codeInfo[2], codeInfo[3])
-    
+
+
 def Status(msg, verbose=True):
     """Issues a status update to the Tf diagnostic system.
 
@@ -124,15 +139,18 @@ def Status(msg, verbose=True):
     else:
         _Status(msg, "", "", "", 0)
 
+
 def RaiseCodingError(msg):
     """Raise a coding error to the Tf Diagnostic system."""
     codeInfo = GetCodeLocation(framesUp=1)
     _RaiseCodingError(msg, codeInfo[0], codeInfo[1], codeInfo[2], codeInfo[3])
 
+
 def RaiseRuntimeError(msg):
     """Raise a runtime error to the Tf Diagnostic system."""
     codeInfo = GetCodeLocation(framesUp=1)
     _RaiseRuntimeError(msg, codeInfo[0], codeInfo[1], codeInfo[2], codeInfo[3])
+
 
 def Fatal(msg):
     """Raise a fatal error to the Tf Diagnostic system."""
@@ -141,26 +159,26 @@ def Fatal(msg):
 
 
 class NamedTemporaryFile(object):
-    """A named temporary file which keeps the internal file handle closed. 
-       A class which constructs a temporary file(that isn't open) on __enter__,
-       provides its name as an attribute, and deletes it on __exit__. 
-       
-       Note: The constructor args for this object match those of 
-       python's tempfile.mkstemp() function, and will have the same effect on
-       the underlying file created."""
+    """A named temporary file which keeps the internal file handle closed.
+    A class which constructs a temporary file(that isn't open) on __enter__,
+    provides its name as an attribute, and deletes it on __exit__.
 
-    def __init__(self, suffix='', prefix='', dir=None, text=False):
-        # Note that we defer creation until the enter block to 
+    Note: The constructor args for this object match those of
+    python's tempfile.mkstemp() function, and will have the same effect on
+    the underlying file created."""
+
+    def __init__(self, suffix="", prefix="", dir=None, text=False):
+        # Note that we defer creation until the enter block to
         # prevent users from unintentionally creating a bunch of
         # temp files that don't get cleaned up.
-        self._args = (suffix,  prefix, dir, text)
+        self._args = (suffix, prefix, dir, text)
 
     def __enter__(self):
         from tempfile import mkstemp
         from os import close
-        
+
         fd, path = mkstemp(*self._args)
-        close(fd) 
+        close(fd)
 
         # XXX: We currently only expose the name attribute
         # more can be added based on client needs in the future.
@@ -170,9 +188,10 @@ class NamedTemporaryFile(object):
 
     def __exit__(self, *args):
         import os
+
         os.remove(self.name)
 
     @property
     def name(self):
-        """The path for the temporary file created.""" 
+        """The path for the temporary file created."""
         return self._name

@@ -3,7 +3,7 @@ import numpy as np
 data_name = "s_v_s1"
 data_list = []
 for i in range(49):
-    v_and_s = np.load(f'{i}.npy')
+    v_and_s = np.load(f"{i}.npy")
     vision_data = v_and_s[:, :10]
     state_data = v_and_s[:, 10:]
     s = state_data[:-1, :]

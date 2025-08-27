@@ -28,13 +28,14 @@ glf
 
 from . import _glf
 from pxr import Tf
+
 Tf.PrepareModule(_glf, locals())
 del _glf, Tf
 
 try:
     from . import __DOC
+
     __DOC.Execute(locals())
     del __DOC
 except Exception:
     pass
-

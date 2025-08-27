@@ -23,11 +23,13 @@
 #
 from . import _usdUtils
 from pxr import Tf
+
 Tf.PrepareModule(_usdUtils, locals())
 del _usdUtils, Tf
 
 try:
     from . import __DOC
+
     __DOC.Execute(locals())
     del __DOC
 except Exception:

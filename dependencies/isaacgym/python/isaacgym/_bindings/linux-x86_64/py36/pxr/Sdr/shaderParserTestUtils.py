@@ -56,7 +56,7 @@ def TestBasicProperties(node):
         "label": "inputA label",
         "page": "inputs1",
         "help": "inputA help message",
-        "uncategorized": "1"
+        "uncategorized": "1",
     }
 
     if not isOSL:
@@ -64,7 +64,6 @@ def TestBasicProperties(node):
         metadata["default"] = "0.0"
         metadata["type"] = "float"
     # --------------------------------------------------------------------------
-
 
     properties = {
         "inputA": node.GetInput("inputA"),
@@ -105,8 +104,12 @@ def TestBasicProperties(node):
     assert list(properties["inputF2"].GetDefaultValue()) == [1.0, 2.0]
 
     assert properties["inputStrArray"].GetArraySize() == 4
-    assert list(properties["inputStrArray"].GetDefaultValue()) == \
-        ["test", "string", "array", "values"]
+    assert list(properties["inputStrArray"].GetDefaultValue()) == [
+        "test",
+        "string",
+        "array",
+        "values",
+    ]
 
 
 def TestShadingProperties(node):
@@ -147,10 +150,7 @@ def TestShadingProperties(node):
     assert properties["inputA"].GetHelp() == "inputA help message"
     assert properties["inputA"].GetPage() == "inputs1"
     assert properties["inputA"].GetWidget() == "number"
-    assert properties["inputA"].GetHints() == {
-        "widget": "number",
-        "uncategorized": "1"
-    }
+    assert properties["inputA"].GetHints() == {"widget": "number", "uncategorized": "1"}
     assert properties["inputA"].GetOptions() == []
     assert properties["inputA"].GetVStructMemberOf() == ""
     assert properties["inputA"].GetVStructMemberName() == ""
@@ -166,7 +166,7 @@ def TestShadingProperties(node):
     # --------------------------------------------------------------------------
     assert set(properties["inputOptions"].GetOptions()) == {
         ("opt1", "opt1val"),
-        ("opt2", "opt2val")
+        ("opt2", "opt2val"),
     }
 
     assert set(properties["inputInterp"].GetOptions()) == {
@@ -197,16 +197,17 @@ def TestShadingProperties(node):
     assert properties["inputF3"].GetTypeAsSdfType() == (SdfTypes.Float3, "")
     assert properties["inputF4"].GetTypeAsSdfType() == (SdfTypes.Float4, "")
     assert properties["inputF5"].GetTypeAsSdfType() == (SdfTypes.FloatArray, "")
-    assert properties["inputStruct"].GetTypeAsSdfType() == \
-           (SdfTypes.Token, Sdr.PropertyTypes.Struct)
+    assert properties["inputStruct"].GetTypeAsSdfType() == (
+        SdfTypes.Token,
+        Sdr.PropertyTypes.Struct,
+    )
 
     # --------------------------------------------------------------------------
     # Ensure asset identifiers are detected correctly
     # --------------------------------------------------------------------------
     assert properties["inputAssetIdentifier"].IsAssetIdentifier()
     assert not properties["inputOptions"].IsAssetIdentifier()
-    assert properties["inputAssetIdentifier"].GetTypeAsSdfType() == \
-           (SdfTypes.Asset, "")
+    assert properties["inputAssetIdentifier"].GetTypeAsSdfType() == (SdfTypes.Asset, "")
 
     # Nested pages and VStructs are only possible in args files
     if not isOSL:
@@ -250,8 +251,14 @@ def TestBasicNode(node, nodeSourceType, nodeURI):
     nodeName = "TestNodeOSL" if isOSL else "TestNodeARGS"
     numOutputs = 8 if isOSL else 10
     outputNames = {
-        "resultF", "resultF2", "resultF3", "resultI", "outputPoint",
-        "outputNormal", "outputColor", "outputVector"
+        "resultF",
+        "resultF2",
+        "resultF3",
+        "resultI",
+        "outputPoint",
+        "outputNormal",
+        "outputColor",
+        "outputVector",
     }
     metadata = {
         "category": "testing",
@@ -259,11 +266,12 @@ def TestBasicNode(node, nodeSourceType, nodeURI):
         "help": "This is the test node",
         "label": "TestNodeLabel",
         "primvars": "primvar1|primvar2|primvar3|$primvarNamingProperty|"
-                    "$invalidPrimvarNamingProperty",
-        "uncategorizedMetadata": "uncategorized"
+        "$invalidPrimvarNamingProperty",
+        "uncategorizedMetadata": "uncategorized",
     }
-    info = "TestNode%s (context: '%s', version: '<invalid version>', family: ''); URI: '%s'" % (
-        "OSL" if isOSL else "ARGS", nodeContext, nodeURI
+    info = (
+        "TestNode%s (context: '%s', version: '<invalid version>', family: ''); URI: '%s'"
+        % ("OSL" if isOSL else "ARGS", nodeContext, nodeURI)
     )
 
     if not isOSL:
@@ -275,11 +283,15 @@ def TestBasicNode(node, nodeSourceType, nodeURI):
         outputNames.add("vstruct1_bump")
     # --------------------------------------------------------------------------
 
-    nodeInputs = {propertyName: node.GetShaderInput(propertyName)
-                  for propertyName in node.GetInputNames()}
+    nodeInputs = {
+        propertyName: node.GetShaderInput(propertyName)
+        for propertyName in node.GetInputNames()
+    }
 
-    nodeOutputs = {propertyName: node.GetShaderOutput(propertyName)
-                   for propertyName in node.GetOutputNames()}
+    nodeOutputs = {
+        propertyName: node.GetShaderOutput(propertyName)
+        for propertyName in node.GetOutputNames()
+    }
 
     assert node.GetName() == nodeName
     assert node.GetContext() == nodeContext
@@ -310,18 +322,31 @@ def TestBasicNode(node, nodeSourceType, nodeURI):
     assert nodeOutputs["outputVector"] is not None
     print(set(node.GetInputNames()))
     assert set(node.GetInputNames()) == {
-        "inputA", "inputB", "inputC", "inputD", "inputF2", "inputF3", "inputF4",
-        "inputF5", "inputInterp", "inputOptions", "inputPoint", "inputNormal",
-        "inputStruct", "inputAssetIdentifier", "primvarNamingProperty",
-        "invalidPrimvarNamingProperty", "inputStrArray"
+        "inputA",
+        "inputB",
+        "inputC",
+        "inputD",
+        "inputF2",
+        "inputF3",
+        "inputF4",
+        "inputF5",
+        "inputInterp",
+        "inputOptions",
+        "inputPoint",
+        "inputNormal",
+        "inputStruct",
+        "inputAssetIdentifier",
+        "primvarNamingProperty",
+        "invalidPrimvarNamingProperty",
+        "inputStrArray",
     }
     assert set(node.GetOutputNames()) == outputNames
 
     # There may be additional metadata passed in via the NdrNodeDiscoveryResult.
-    # So, ensure that the bits we expect to see are there instead of doing 
+    # So, ensure that the bits we expect to see are there instead of doing
     # an equality check.
     nodeMetadata = node.GetMetadata()
-    for i,j in metadata.items():
+    for i, j in metadata.items():
         assert i in nodeMetadata
         assert nodeMetadata[i] == metadata[i]
 
@@ -342,17 +367,29 @@ def TestShaderSpecificNode(node):
     label = "TestNodeLabel" if isOSL else ""
     category = "testing" if isOSL else ""
     vstructNames = [] if isOSL else ["vstruct1"]
-    pages = {"", "inputs1", "inputs2", "results"} if isOSL else \
-            {"", "inputs1", "inputs2", "results", "VStructs.Nested",
-             "VStructs.Nested.More"}
+    pages = (
+        {"", "inputs1", "inputs2", "results"}
+        if isOSL
+        else {
+            "",
+            "inputs1",
+            "inputs2",
+            "results",
+            "VStructs.Nested",
+            "VStructs.Nested.More",
+        }
+    )
     # --------------------------------------------------------------------------
 
+    shaderInputs = {
+        propertyName: node.GetShaderInput(propertyName)
+        for propertyName in node.GetInputNames()
+    }
 
-    shaderInputs = {propertyName: node.GetShaderInput(propertyName)
-                    for propertyName in node.GetInputNames()}
-
-    shaderOutputs = {propertyName: node.GetShaderOutput(propertyName)
-                     for propertyName in node.GetOutputNames()}
+    shaderOutputs = {
+        propertyName: node.GetShaderOutput(propertyName)
+        for propertyName in node.GetOutputNames()
+    }
 
     assert len(shaderInputs) == 17
     assert len(shaderOutputs) == numOutputs
@@ -384,17 +421,35 @@ def TestShaderSpecificNode(node):
     assert set(node.GetPrimvars()) == {"primvar1", "primvar2", "primvar3"}
     assert set(node.GetAdditionalPrimvarProperties()) == {"primvarNamingProperty"}
     assert set(node.GetPropertyNamesForPage("results")) == {
-        "resultF", "resultF2", "resultF3", "resultI"
+        "resultF",
+        "resultF2",
+        "resultF3",
+        "resultI",
     }
     assert set(node.GetPropertyNamesForPage("")) == {
-        "outputPoint", "outputNormal", "outputColor", "outputVector"
+        "outputPoint",
+        "outputNormal",
+        "outputColor",
+        "outputVector",
     }
     assert set(node.GetPropertyNamesForPage("inputs1")) == {"inputA"}
     assert set(node.GetPropertyNamesForPage("inputs2")) == {
-        "inputB", "inputC", "inputD", "inputF2", "inputF3", "inputF4", "inputF5",
-        "inputInterp", "inputOptions", "inputPoint", "inputNormal",
-        "inputStruct", "inputAssetIdentifier", "primvarNamingProperty",
-        "invalidPrimvarNamingProperty", "inputStrArray"
+        "inputB",
+        "inputC",
+        "inputD",
+        "inputF2",
+        "inputF3",
+        "inputF4",
+        "inputF5",
+        "inputInterp",
+        "inputOptions",
+        "inputPoint",
+        "inputNormal",
+        "inputStruct",
+        "inputAssetIdentifier",
+        "primvarNamingProperty",
+        "invalidPrimvarNamingProperty",
+        "inputStrArray",
     }
     assert node.GetAllVstructNames() == vstructNames
 

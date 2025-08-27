@@ -7,7 +7,7 @@ distribution of this software and related documentation without an express
 license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 
-PyTorch tensor interop """
+PyTorch tensor interop"""
 
 from . import gymapi
 
@@ -16,33 +16,33 @@ import torch
 
 def _import_gymtorch():
     import os
-    import importlib
     import torch.utils.cpp_extension
 
     global torch
-    ver = torch.__version__.split(sep='.')
+    ver = torch.__version__.split(sep=".")
     ver_major = int(ver[0])
     ver_minor = int(ver[1])
 
     print("PyTorch version", torch.__version__)
 
     import torch.cuda
+
     print("Device count", torch.cuda.device_count())
 
     thisdir = os.path.dirname(__file__)
     srcdir = os.path.join(thisdir, "_bindings/src/gymtorch")
     print(srcdir)
 
-    sources = [
-        os.path.join(srcdir, "gymtorch.cpp")
-    ]
+    sources = [os.path.join(srcdir, "gymtorch.cpp")]
 
     if os.name == "nt":
         cflags = ["/DTORCH_MAJOR=%d" % ver_major, "/DTORCH_MINOR=%d" % ver_minor]
     else:
         cflags = ["-DTORCH_MAJOR=%d" % ver_major, "-DTORCH_MINOR=%d" % ver_minor]
 
-    gt = torch.utils.cpp_extension.load(name="gymtorch", sources=sources, extra_cflags=cflags, verbose=True)
+    gt = torch.utils.cpp_extension.load(
+        name="gymtorch", sources=sources, extra_cflags=cflags, verbose=True
+    )
     # print(gt)
 
     # import all module symbols
@@ -53,7 +53,7 @@ def _import_gymtorch():
     globals().update(attrs)
 
 
-def _create_context(device='cuda:0'):
+def _create_context(device="cuda:0"):
     """Force PyTorch to create a primary CUDA context on the specified device"""
     torch.zeros([1], device=device)
 

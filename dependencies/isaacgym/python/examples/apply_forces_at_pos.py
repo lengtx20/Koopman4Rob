@@ -26,7 +26,8 @@ gym = gymapi.acquire_gym()
 
 # parse arguments
 args = gymutil.parse_arguments(
-    description="Example of applying forces to bodies at given positions")
+    description="Example of applying forces to bodies at given positions"
+)
 
 # configure sim
 sim_params = gymapi.SimParams()
@@ -47,9 +48,11 @@ else:
     raise Exception("GPU pipeline is only available with PhysX")
 
 sim_params.use_gpu_pipeline = args.use_gpu_pipeline
-device = args.sim_device if args.use_gpu_pipeline else 'cpu'
+device = args.sim_device if args.use_gpu_pipeline else "cpu"
 
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 if sim is None:
     raise Exception("Failed to create sim")
 
@@ -69,7 +72,7 @@ asset_file = "mjcf/nv_ant.xml"
 asset = gym.load_asset(sim, asset_root, asset_file, gymapi.AssetOptions())
 
 num_bodies = gym.get_asset_rigid_body_count(asset)
-print('num_bodies', num_bodies)
+print("num_bodies", num_bodies)
 
 # default pose
 pose = gymapi.Transform()
@@ -113,17 +116,22 @@ force_offset = 0.2
 
 frame_count = 0
 while not gym.query_viewer_has_closed(viewer):
-
     if (frame_count - 99) % 200 == 0:
-
         gym.refresh_rigid_body_state_tensor(sim)
 
         # set forces and force positions for ant root bodies (first body in each env)
-        forces = torch.zeros((num_envs, num_bodies, 3), device=device, dtype=torch.float)
+        forces = torch.zeros(
+            (num_envs, num_bodies, 3), device=device, dtype=torch.float
+        )
         force_positions = rb_positions.clone()
         forces[:, 0, 2] = 400
         force_positions[:, 0, 1] += force_offset
-        gym.apply_rigid_body_force_at_pos_tensors(sim, gymtorch.unwrap_tensor(forces), gymtorch.unwrap_tensor(force_positions), gymapi.ENV_SPACE)
+        gym.apply_rigid_body_force_at_pos_tensors(
+            sim,
+            gymtorch.unwrap_tensor(forces),
+            gymtorch.unwrap_tensor(force_positions),
+            gymapi.ENV_SPACE,
+        )
 
         force_offset = -force_offset
 

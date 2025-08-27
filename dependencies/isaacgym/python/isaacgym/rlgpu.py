@@ -11,8 +11,6 @@ import importlib
 import sys
 import os
 
-from . import gymdeps
-
 
 def _format_path(pathstr):
     if os.name == "nt":
@@ -58,10 +56,15 @@ def _import_active_version():
         if hasattr(module, "__all__"):
             attrs = {key: getattr(module, key) for key in module.__all__}
         else:
-            attrs = {key: value for key, value in module.__dict__.items() if key[0] != "_"}
+            attrs = {
+                key: value for key, value in module.__dict__.items() if key[0] != "_"
+            }
         globals().update(attrs)
     else:
-        raise RuntimeError("No rlgpu module found for the active version of Python (%d.%d)" % (major, minor))
+        raise RuntimeError(
+            "No rlgpu module found for the active version of Python (%d.%d)"
+            % (major, minor)
+        )
 
 
 _import_active_version()

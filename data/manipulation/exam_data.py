@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def main():
     num_files = 64
     resnet_means, resnet_vars = [], []
@@ -23,24 +24,35 @@ def main():
         state_means.append(np.mean(state_data))
         state_vars.append(np.var(state_data))
 
-        print(f"[INFO] File {i}: "
-              f"ResNet mean={resnet_means[-1]:.6f}, var={resnet_vars[-1]:.6f} | "
-              f"State mean={state_means[-1]:.6f}, var={state_vars[-1]:.6f}")
+        print(
+            f"[INFO] File {i}: "
+            f"ResNet mean={resnet_means[-1]:.6f}, var={resnet_vars[-1]:.6f} | "
+            f"State mean={state_means[-1]:.6f}, var={state_vars[-1]:.6f}"
+        )
 
     # ===== 文件级别统计结果 =====
     print("\n[SUMMARY - File Level]")
-    print(f"ResNet: mean of means={np.mean(resnet_means):.6f}, "
-          f"mean of vars={np.mean(resnet_vars):.6f}")
-    print(f"State : mean of means={np.mean(state_means):.6f}, "
-          f"mean of vars={np.mean(state_vars):.6f}")
+    print(
+        f"ResNet: mean of means={np.mean(resnet_means):.6f}, "
+        f"mean of vars={np.mean(resnet_vars):.6f}"
+    )
+    print(
+        f"State : mean of means={np.mean(state_means):.6f}, "
+        f"mean of vars={np.mean(state_vars):.6f}"
+    )
 
     # ===== 全局统计（拼接后整体计算） =====
     all_resnet = np.concatenate(all_resnet, axis=0)
     all_state = np.concatenate(all_state, axis=0)
 
     print("\n[SUMMARY - Global Level]")
-    print(f"ResNet: global mean={np.mean(all_resnet):.6f}, global var={np.var(all_resnet):.6f}")
-    print(f"State : global mean={np.mean(all_state):.6f}, global var={np.var(all_state):.6f}")
+    print(
+        f"ResNet: global mean={np.mean(all_resnet):.6f}, global var={np.var(all_resnet):.6f}"
+    )
+    print(
+        f"State : global mean={np.mean(all_state):.6f}, global var={np.var(all_state):.6f}"
+    )
+
 
 if __name__ == "__main__":
     main()

@@ -20,6 +20,7 @@ from isaacgym import gymapi, gymutil
 def clamp(x, min_value, max_value):
     return max(min(x, max_value), min_value)
 
+
 # simple asset descriptor for selecting from a list
 
 
@@ -61,7 +62,9 @@ sim_params.use_gpu_pipeline = False
 if args.use_gpu_pipeline:
     print("WARNING: Forcing CPU pipeline.")
 
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 if sim is None:
     print("*** Failed to create sim")
     quit()
@@ -99,15 +102,15 @@ dof_states = np.zeros(num_dofs, dtype=gymapi.DofState.dtype)
 dof_types = [gym.get_asset_dof_type(asset, i) for i in range(num_dofs)]
 
 # get the position slice of the DOF state array
-dof_positions = dof_states['pos']
+dof_positions = dof_states["pos"]
 
 # get the limit-related slices of the DOF properties array
-stiffnesses = dof_props['stiffness']
-dampings = dof_props['damping']
-armatures = dof_props['armature']
-has_limits = dof_props['hasLimits']
-lower_limits = dof_props['lower']
-upper_limits = dof_props['upper']
+stiffnesses = dof_props["stiffness"]
+dampings = dof_props["damping"]
+armatures = dof_props["armature"]
+has_limits = dof_props["hasLimits"]
+lower_limits = dof_props["lower"]
+upper_limits = dof_props["upper"]
 
 # initialize default positions, limits, and speeds (make sure they are in reasonable ranges)
 defaults = np.zeros(num_dofs)
@@ -181,7 +184,14 @@ for i in range(num_envs):
     actor_handles.append(actor_handle)
 
     props = gym.get_actor_dof_properties(env, actor_handle)
-    props["driveMode"] = (gymapi.DOF_MODE_POS, gymapi.DOF_MODE_POS, gymapi.DOF_MODE_POS, gymapi.DOF_MODE_POS, gymapi.DOF_MODE_POS, gymapi.DOF_MODE_POS)
+    props["driveMode"] = (
+        gymapi.DOF_MODE_POS,
+        gymapi.DOF_MODE_POS,
+        gymapi.DOF_MODE_POS,
+        gymapi.DOF_MODE_POS,
+        gymapi.DOF_MODE_POS,
+        gymapi.DOF_MODE_POS,
+    )
     props["stiffness"] = (50.0, 50.0, 50.0, 50.0, 50.0, 50.0)
     props["damping"] = (10.0, 10.0, 10.0, 100.0, 100.0, 100.0)
 
@@ -221,11 +231,11 @@ def quat2expcoord(q):
     Returns:
         np.ndarray: Exponential coordinate as 3-element array.
     """
-    if (q[-1] < 0):
+    if q[-1] < 0:
         q = -q
 
-    theta = 2. * math.atan2(np.linalg.norm(q[:-1]), q[-1])
-    w = (1. / np.sin(theta/2.0)) * q[:-1]
+    theta = 2.0 * math.atan2(np.linalg.norm(q[:-1]), q[-1])
+    w = (1.0 / np.sin(theta / 2.0)) * q[:-1]
 
     return w * theta
 
@@ -235,7 +245,6 @@ axes_geom = gymutil.AxesGeometry(0.5)
 
 cnt = 0
 while not gym.query_viewer_has_closed(viewer):
-
     # step the physics
     gym.simulate(sim)
     gym.fetch_results(sim, True)

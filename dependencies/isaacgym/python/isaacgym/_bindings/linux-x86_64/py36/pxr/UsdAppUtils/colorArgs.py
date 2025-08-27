@@ -22,7 +22,8 @@
 # language governing permissions and limitations under the Apache License.
 #
 
-def AddCmdlineArgs(argsParser, defaultValue='sRGB', altHelpText=''):
+
+def AddCmdlineArgs(argsParser, defaultValue="sRGB", altHelpText=""):
     """
     Adds color-related command line arguments to argsParser.
 
@@ -30,9 +31,14 @@ def AddCmdlineArgs(argsParser, defaultValue='sRGB', altHelpText=''):
     """
     helpText = altHelpText
     if not helpText:
-        helpText = (
-            'the color correction mode to use (default=%(default)s)')
+        helpText = "the color correction mode to use (default=%(default)s)"
 
-    argsParser.add_argument('--colorCorrectionMode', '-color', action='store',
-        type=str, default=defaultValue,
-        choices=['disabled', 'sRGB', 'openColorIO'], help=helpText)
+    argsParser.add_argument(
+        "--colorCorrectionMode",
+        "-color",
+        action="store",
+        type=str,
+        default=defaultValue,
+        choices=["disabled", "sRGB", "openColorIO"],
+        help=helpText,
+    )

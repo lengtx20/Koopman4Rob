@@ -1,8 +1,8 @@
-# 
-#====
-#	Copyright (c) 2018, NVIDIA CORPORATION
-#======
-# 
+#
+# ====
+# Copyright (c) 2018, NVIDIA CORPORATION
+# ======
+#
 
 #
 # Copyright 2016 Pixar
@@ -29,18 +29,20 @@
 #
 from . import _physicsSchemaTools
 from pxr import Tf
+
 Tf.PrepareModule(_physicsSchemaTools, locals())
 del Tf
 
 try:
     import __DOC
+
     __DOC.Execute(locals())
     del __DOC
 except Exception:
     try:
         import __tmpDoc
+
         __tmpDoc.Execute(locals())
         del __tmpDoc
     except:
         pass
-

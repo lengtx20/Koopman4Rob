@@ -23,11 +23,13 @@
 #
 from . import _ar
 from pxr import Tf
+
 Tf.PrepareModule(_ar, locals())
 del _ar, Tf
 
 try:
     from . import __DOC
+
     __DOC.Execute(locals())
     del __DOC
 except Exception:

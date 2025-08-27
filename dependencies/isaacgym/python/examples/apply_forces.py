@@ -25,7 +25,8 @@ gym = gymapi.acquire_gym()
 
 # parse arguments
 args = gymutil.parse_arguments(
-    description="Example of applying forces and torques to bodies")
+    description="Example of applying forces and torques to bodies"
+)
 
 # configure sim
 sim_params = gymapi.SimParams()
@@ -46,9 +47,11 @@ else:
     raise Exception("GPU pipeline is only available with PhysX")
 
 sim_params.use_gpu_pipeline = args.use_gpu_pipeline
-device = args.sim_device if args.use_gpu_pipeline else 'cpu'
+device = args.sim_device if args.use_gpu_pipeline else "cpu"
 
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 if sim is None:
     raise Exception("Failed to create sim")
 
@@ -68,7 +71,7 @@ asset_file = "mjcf/nv_ant.xml"
 asset = gym.load_asset(sim, asset_root, asset_file, gymapi.AssetOptions())
 
 num_bodies = gym.get_asset_rigid_body_count(asset)
-print('num_bodies', num_bodies)
+print("num_bodies", num_bodies)
 
 # default pose
 pose = gymapi.Transform()
@@ -107,14 +110,22 @@ torque_amt = 100
 
 frame_count = 0
 while not gym.query_viewer_has_closed(viewer):
-
     if (frame_count - 99) % 200 == 0:
         # set forces and torques for the ant root bodies
-        forces = torch.zeros((num_envs, num_bodies, 3), device=device, dtype=torch.float)
-        torques = torch.zeros((num_envs, num_bodies, 3), device=device, dtype=torch.float)
+        forces = torch.zeros(
+            (num_envs, num_bodies, 3), device=device, dtype=torch.float
+        )
+        torques = torch.zeros(
+            (num_envs, num_bodies, 3), device=device, dtype=torch.float
+        )
         forces[:, 0, 2] = 300
         torques[:, 0, 2] = torque_amt
-        gym.apply_rigid_body_force_tensors(sim, gymtorch.unwrap_tensor(forces), gymtorch.unwrap_tensor(torques), gymapi.ENV_SPACE)
+        gym.apply_rigid_body_force_tensors(
+            sim,
+            gymtorch.unwrap_tensor(forces),
+            gymtorch.unwrap_tensor(torques),
+            gymapi.ENV_SPACE,
+        )
 
         torque_amt = -torque_amt
 

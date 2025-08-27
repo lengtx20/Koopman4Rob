@@ -15,10 +15,11 @@ import sys
 
 
 def _import_deps():
-
     # make sure that torch was not imported before isaacgym modules
     if "torch" in sys.modules:
-        raise ImportError("PyTorch was imported before isaacgym modules.  Please import torch after isaacgym modules.")
+        raise ImportError(
+            "PyTorch was imported before isaacgym modules.  Please import torch after isaacgym modules."
+        )
 
     # get the directory that contains the native libs
     lib_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), "_bindings"))

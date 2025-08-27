@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: F401
 
+
 def get_activation(name: str):
     return {
         "relu": nn.ReLU(),
@@ -16,6 +17,7 @@ def get_activation(name: str):
         "mish": nn.Mish(),
         "linear": nn.Identity(),
     }[name]
+
 
 class Encoder(nn.Module):
     def __init__(

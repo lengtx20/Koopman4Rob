@@ -22,7 +22,8 @@
 # language governing permissions and limitations under the Apache License.
 #
 
-def AddCmdlineArgs(argsParser, defaultValue=None, altHelpText=''):
+
+def AddCmdlineArgs(argsParser, defaultValue=None, altHelpText=""):
     """
     Adds camera-related command line arguments to argsParser.
 
@@ -39,11 +40,12 @@ def AddCmdlineArgs(argsParser, defaultValue=None, altHelpText=''):
     helpText = altHelpText
     if not helpText:
         helpText = (
-            'Which camera to use - may be given as either just the '
-            'camera\'s prim name (i.e. just the last element in the prim '
-            'path), or as a full prim path. Note that if only the prim name '
-            'is used and more than one camera exists with that name, which '
-            'one is used will effectively be random (default=%(default)s)')
+            "Which camera to use - may be given as either just the "
+            "camera's prim name (i.e. just the last element in the prim "
+            "path), or as a full prim path. Note that if only the prim name "
+            "is used and more than one camera exists with that name, which "
+            "one is used will effectively be random (default=%(default)s)"
+        )
 
     # This avoids an Sdf warning if an empty string is given, which someone
     # might do for example with usdview to open the app using the 'Free' camera
@@ -53,5 +55,11 @@ def AddCmdlineArgs(argsParser, defaultValue=None, altHelpText=''):
             return Sdf.Path.emptyPath
         return Sdf.Path(inputArg)
 
-    argsParser.add_argument('--camera', '-cam', action='store',
-        type=_ToSdfPath, default=defaultValue, help=helpText)
+    argsParser.add_argument(
+        "--camera",
+        "-cam",
+        action="store",
+        type=_ToSdfPath,
+        default=defaultValue,
+        help=helpText,
+    )

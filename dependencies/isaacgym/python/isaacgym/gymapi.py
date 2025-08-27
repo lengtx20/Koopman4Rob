@@ -14,11 +14,8 @@ Gym bindings wrapper module
 from __future__ import print_function, division, absolute_import
 
 import importlib
-import json
 import sys
 import os
-
-from . import gymdeps
 
 
 def _format_path(pathstr):
@@ -68,7 +65,9 @@ def _import_active_version():
         if hasattr(module, "__all__"):
             attrs = {key: getattr(module, key) for key in module.__all__}
         else:
-            attrs = {key: value for key, value in module.__dict__.items() if key[0] != "_"}
+            attrs = {
+                key: value for key, value in module.__dict__.items() if key[0] != "_"
+            }
         globals().update(attrs)
 
         # initialize the carbonite framework
@@ -98,7 +97,10 @@ def _import_active_version():
             sys.path.append(os.path.join(lib_dir, platform, "py36"))
 
     else:
-        raise RuntimeError("No gym module found for the active version of Python (%d.%d)" % (major, minor))
+        raise RuntimeError(
+            "No gym module found for the active version of Python (%d.%d)"
+            % (major, minor)
+        )
 
 
 _import_active_version()

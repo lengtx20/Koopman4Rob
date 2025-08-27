@@ -10,6 +10,7 @@ from utils.utils import smooth_curve
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
 
+
 class KoopmanDataset(Dataset):
     def __init__(self, data):
         self.data = torch.tensor(data, dtype=torch.float32)
@@ -19,6 +20,7 @@ class KoopmanDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.data[idx]
+
 
 class KoopmanRunner:
     def __init__(
@@ -36,7 +38,7 @@ class KoopmanRunner:
         batch_size=64,
         num_workers=0,
         ewc_lambda=0.0,
-        tb_log_dir='logs/tensorboard',
+        tb_log_dir="logs/tensorboard",
     ):
         """
         model:      Deep Koopman model
@@ -63,9 +65,17 @@ class KoopmanRunner:
 
         # dataset
         self.train_loader = DataLoader(
-            KoopmanDataset(train_data), batch_size=batch_size, shuffle=True, num_workers=num_workers)
+            KoopmanDataset(train_data),
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+        )
         self.val_loader = DataLoader(
-            KoopmanDataset(val_data), batch_size=batch_size, shuffle=False, num_workers=num_workers)
+            KoopmanDataset(val_data),
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+        )
 
         # normalization (TODO)
         if self.normalize:
@@ -286,10 +296,10 @@ class KoopmanRunner:
             self.model.train()
             for batch in self.train_loader:
                 batch = batch.to(self.device)
-                x_t = batch[:, :self.state_dim]
-                a_t = batch[:, self.state_dim:self.state_dim + self.action_dim]
-                x_t1 = batch[:, -self.state_dim:]
-            
+                x_t = batch[:, : self.state_dim]
+                a_t = batch[:, self.state_dim : self.state_dim + self.action_dim]
+                x_t1 = batch[:, -self.state_dim :]
+
                 self.optimizer.zero_grad()
                 pred_x_t1 = self.model(x_t, a_t, False)
                 loss = self.loss_fn(pred_x_t1, x_t1)
@@ -303,7 +313,7 @@ class KoopmanRunner:
                 total_loss += loss.item() * batch.size(0)
 
             train_loss = total_loss / self.train_data.shape[0]
-            
+
             # ----- validation step -----
             if self.val_data is None:
                 val_loss = None
@@ -313,16 +323,18 @@ class KoopmanRunner:
                 with torch.no_grad():
                     for batch in self.val_loader:
                         batch = batch.to(self.device)
-                        x_t = batch[:, :self.state_dim]
-                        a_t = batch[:, self.state_dim:self.state_dim + self.action_dim]
-                        x_t1 = batch[:, -self.state_dim:]
+                        x_t = batch[:, : self.state_dim]
+                        a_t = batch[
+                            :, self.state_dim : self.state_dim + self.action_dim
+                        ]
+                        x_t1 = batch[:, -self.state_dim :]
 
                         pred_x_t1 = self.model(x_t, a_t, False)
                         loss = self.loss_fn(pred_x_t1, x_t1)
                         val_loss += loss.item() * batch.size(0)
 
                 val_loss /= self.val_data.shape[0]
-            
+
             self.losses.append(train_loss)
             self.vales.append(val_loss)
 
@@ -339,7 +351,9 @@ class KoopmanRunner:
                 postfix["ValLoss"] = f"{val_loss:.4f}"
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    tqdm.write(f"[INFO] Epoch {epoch + 1}: Validation loss improved to {val_loss:.4f}")
+                    tqdm.write(
+                        f"[INFO] Epoch {epoch + 1}: Validation loss improved to {val_loss:.4f}"
+                    )
             epoch_bar.set_postfix(postfix)
 
         self.writer.close()
@@ -357,7 +371,7 @@ class KoopmanRunner:
             print(f"[Runner] Model saved to {model_dir}")
         else:
             print("[INFO] No Koopman model saved")
-        
+
         if save_model and model_dir is not None:
             np.save(os.path.join(model_dir, "losses.npy"), self.losses)
             np.save(os.path.join(model_dir, "vales.npy"), self.vales)
@@ -406,7 +420,7 @@ class KoopmanRunner:
             loader = self.val_loader
         else:
             raise ValueError("dataset must be 'train' or 'val'")
-        
+
         traj = []
         total_loss, total_mae = 0, 0
         n_samples = 0
@@ -414,9 +428,9 @@ class KoopmanRunner:
         with torch.no_grad():
             for batch in loader:
                 batch = batch.to(self.device)
-                x_t = batch[:, :self.state_dim]
-                a_t = batch[:, self.state_dim:self.state_dim + self.action_dim]
-                x_t1 = batch[:, -self.state_dim:]
+                x_t = batch[:, : self.state_dim]
+                a_t = batch[:, self.state_dim : self.state_dim + self.action_dim]
+                x_t1 = batch[:, -self.state_dim :]
 
                 # ----- 单步 or 多步预测 -----
                 if rollout_steps == 1:
@@ -426,7 +440,9 @@ class KoopmanRunner:
                     pred_x_t1 = []
                     cur_x = x_t
                     for step in range(rollout_steps):
-                        cur_a = batch[:, self.state_dim:self.state_dim + self.action_dim]
+                        cur_a = batch[
+                            :, self.state_dim : self.state_dim + self.action_dim
+                        ]
                         cur_x = self.model(cur_x, cur_a, False)
                         pred_x_t1.append(cur_x)
                     pred_x_t1 = pred_x_t1[-1]  # 取最后一步预测
@@ -434,12 +450,16 @@ class KoopmanRunner:
                 # ----- loss & metrics -----
                 loss = self.loss_fn(pred_x_t1, x_t1)
                 total_loss += loss.item() * batch.size(0)
-                total_mae += torch.mean(torch.abs(pred_x_t1 - x_t1)).item() * batch.size(0)
+                total_mae += torch.mean(
+                    torch.abs(pred_x_t1 - x_t1)
+                ).item() * batch.size(0)
                 n_samples += batch.size(0)
 
                 # ----- 保存轨迹 -----
                 traj.append(
-                    torch.cat([x_t.cpu(), a_t.cpu(), x_t1.cpu(), pred_x_t1.cpu()], dim=1).numpy()
+                    torch.cat(
+                        [x_t.cpu(), a_t.cpu(), x_t1.cpu(), pred_x_t1.cpu()], dim=1
+                    ).numpy()
                 )
 
         # ----- 结果统计 -----
@@ -466,8 +486,8 @@ class KoopmanRunner:
         绘制每个状态变量随时间的轨迹（真实 vs 预测）。
         x 轴为时间步，y 轴为状态值。
         """
-        x_t = self.traj_np[:, : self.model.state_dim]        # True states
-        pred_x_t1 = self.traj_np[:, -self.model.state_dim :] # Predicted states
+        x_t = self.traj_np[:, : self.model.state_dim]  # True states
+        pred_x_t1 = self.traj_np[:, -self.model.state_dim :]  # Predicted states
 
         print("[DEBUG] x_t shape:", x_t.shape)
         print("[DEBUG] pred_x_t1 shape:", pred_x_t1.shape)

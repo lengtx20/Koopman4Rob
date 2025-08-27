@@ -23,21 +23,24 @@
 #
 from . import _sdf
 from pxr import Tf
+
 Tf.PrepareModule(_sdf, locals())
 del _sdf, Tf
 
+
 def Find(layerFileName, scenePath=None):
-    '''Find(layerFileName, scenePath) -> object
+    """Find(layerFileName, scenePath) -> object
 
-layerFileName: string
-scenePath: Path
+    layerFileName: string
+    scenePath: Path
 
-If given a single string argument, returns the menv layer with 
-the given filename.  If given two arguments (a string and a Path), finds 
-the menv layer with the given filename and returns the scene object 
-within it at the given path.'''
+    If given a single string argument, returns the menv layer with
+    the given filename.  If given two arguments (a string and a Path), finds
+    the menv layer with the given filename and returns the scene object
+    within it at the given path."""
     layer = Layer.Find(layerFileName)
-    if (scenePath is None): return layer
+    if scenePath is None:
+        return layer
     return layer.GetObjectAtPath(scenePath)
 
 
@@ -47,10 +50,10 @@ def _PathElemsToPrefixes(absolute, elements):
         string = "/"
     else:
         string = ""
-    
+
     lastElemWasDotDot = False
     didFirst = False
-    
+
     for elem in elements:
         if elem == Path.parentPathElement:
             # dotdot
@@ -82,8 +85,10 @@ def _PathElemsToPrefixes(absolute, elements):
     path = Path(string)
     return path.GetPrefixes()
 
+
 try:
     from . import __DOC
+
     __DOC.Execute(locals())
     del __DOC
 except Exception:

@@ -23,18 +23,20 @@
 #
 from . import _usdGeom
 from pxr import Tf
+
 Tf.PrepareModule(_usdGeom, locals())
 del Tf
 
 try:
     import __DOC
+
     __DOC.Execute(locals())
     del __DOC
 except Exception:
     try:
         import __tmpDoc
+
         __tmpDoc.Execute(locals())
         del __tmpDoc
     except:
         pass
-

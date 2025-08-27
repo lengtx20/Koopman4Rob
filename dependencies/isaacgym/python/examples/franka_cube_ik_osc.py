@@ -21,8 +21,6 @@ from isaacgym.torch_utils import *
 import math
 import numpy as np
 import torch
-import random
-import time
 
 
 def quat_axis(q, axis=0):
@@ -38,7 +36,7 @@ def orientation_error(desired, current):
 
 
 def cube_grasping_yaw(q, corners):
-    """ returns horizontal rotation required to grasp cube """
+    """returns horizontal rotation required to grasp cube"""
     rc = quat_rotate(q, corners)
     yaw = (torch.atan2(rc[:, 1], rc[:, 0]) - 0.25 * math.pi) % (0.5 * math.pi)
     theta = 0.5 * yaw
@@ -54,28 +52,46 @@ def control_ik(dpose):
     global damping, j_eef, num_envs
     # solve damped least squares
     j_eef_T = torch.transpose(j_eef, 1, 2)
-    lmbda = torch.eye(6, device=device) * (damping ** 2)
+    lmbda = torch.eye(6, device=device) * (damping**2)
     u = (j_eef_T @ torch.inverse(j_eef @ j_eef_T + lmbda) @ dpose).view(num_envs, 7)
     return u
 
 
 def control_osc(dpose):
-    global kp, kd, kp_null, kd_null, default_dof_pos_tensor, mm, j_eef, num_envs, dof_pos, dof_vel, hand_vel
+    global \
+        kp, \
+        kd, \
+        kp_null, \
+        kd_null, \
+        default_dof_pos_tensor, \
+        mm, \
+        j_eef, \
+        num_envs, \
+        dof_pos, \
+        dof_vel, \
+        hand_vel
     mm_inv = torch.inverse(mm)
     m_eef_inv = j_eef @ mm_inv @ torch.transpose(j_eef, 1, 2)
     m_eef = torch.inverse(m_eef_inv)
-    u = torch.transpose(j_eef, 1, 2) @ m_eef @ (
-        kp * dpose - kd * hand_vel.unsqueeze(-1))
+    u = (
+        torch.transpose(j_eef, 1, 2)
+        @ m_eef
+        @ (kp * dpose - kd * hand_vel.unsqueeze(-1))
+    )
 
     # Nullspace control torques `u_null` prevents large changes in joint configuration
     # They are added into the nullspace of OSC so that the end effector orientation remains constant
     # roboticsproceedings.org/rss07/p31.pdf
     j_eef_inv = m_eef @ j_eef @ mm_inv
     u_null = kd_null * -dof_vel + kp_null * (
-        (default_dof_pos_tensor.view(1, -1, 1) - dof_pos + np.pi) % (2 * np.pi) - np.pi)
+        (default_dof_pos_tensor.view(1, -1, 1) - dof_pos + np.pi) % (2 * np.pi) - np.pi
+    )
     u_null = u_null[:, :7]
     u_null = mm @ u_null
-    u += (torch.eye(7, device=device).unsqueeze(0) - torch.transpose(j_eef, 1, 2) @ j_eef_inv) @ u_null
+    u += (
+        torch.eye(7, device=device).unsqueeze(0)
+        - torch.transpose(j_eef, 1, 2) @ j_eef_inv
+    ) @ u_null
     return u.squeeze(-1)
 
 
@@ -91,9 +107,18 @@ gym = gymapi.acquire_gym()
 
 # Add custom arguments
 custom_parameters = [
-    {"name": "--controller", "type": str, "default": "ik",
-     "help": "Controller to use for Franka. Options are {ik, osc}"},
-    {"name": "--num_envs", "type": int, "default": 256, "help": "Number of environments to create"},
+    {
+        "name": "--controller",
+        "type": str,
+        "default": "ik",
+        "help": "Controller to use for Franka. Options are {ik, osc}",
+    },
+    {
+        "name": "--num_envs",
+        "type": int,
+        "default": 256,
+        "help": "Number of environments to create",
+    },
 ]
 args = gymutil.parse_arguments(
     description="Franka Jacobian Inverse Kinematics (IK) + Operational Space Control (OSC) Example",
@@ -102,10 +127,12 @@ args = gymutil.parse_arguments(
 
 # Grab controller
 controller = args.controller
-assert controller in {"ik", "osc"}, f"Invalid controller specified -- options are (ik, osc). Got: {controller}"
+assert controller in {"ik", "osc"}, (
+    f"Invalid controller specified -- options are (ik, osc). Got: {controller}"
+)
 
 # set torch device
-device = args.sim_device if args.use_gpu_pipeline else 'cpu'
+device = args.sim_device if args.use_gpu_pipeline else "cpu"
 
 # configure sim
 sim_params = gymapi.SimParams()
@@ -132,13 +159,15 @@ else:
 damping = 0.05
 
 # OSC params
-kp = 150.
+kp = 150.0
 kd = 2.0 * np.sqrt(kp)
-kp_null = 10.
+kp_null = 10.0
 kd_null = 2.0 * np.sqrt(kp_null)
 
 # create sim
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 if sim is None:
     raise Exception("Failed to create sim")
 
@@ -153,7 +182,9 @@ asset_root = "../../assets"
 table_dims = gymapi.Vec3(0.6, 1.0, 0.4)
 asset_options = gymapi.AssetOptions()
 asset_options.fix_base_link = True
-table_asset = gym.create_box(sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
+table_asset = gym.create_box(
+    sim, table_dims.x, table_dims.y, table_dims.z, asset_options
+)
 
 # create box asset
 box_size = 0.045
@@ -181,7 +212,7 @@ if controller == "ik":
     franka_dof_props["driveMode"][:7].fill(gymapi.DOF_MODE_POS)
     franka_dof_props["stiffness"][:7].fill(400.0)
     franka_dof_props["damping"][:7].fill(40.0)
-else:       # osc
+else:  # osc
     franka_dof_props["driveMode"][:7].fill(gymapi.DOF_MODE_EFFORT)
     franka_dof_props["stiffness"][:7].fill(0.0)
     franka_dof_props["damping"][:7].fill(0.0)
@@ -246,10 +277,16 @@ for i in range(num_envs):
     box_pose.p.x = table_pose.p.x + np.random.uniform(-0.2, 0.1)
     box_pose.p.y = table_pose.p.y + np.random.uniform(-0.3, 0.3)
     box_pose.p.z = table_dims.z + 0.5 * box_size
-    box_pose.r = gymapi.Quat.from_axis_angle(gymapi.Vec3(0, 0, 1), np.random.uniform(-math.pi, math.pi))
+    box_pose.r = gymapi.Quat.from_axis_angle(
+        gymapi.Vec3(0, 0, 1), np.random.uniform(-math.pi, math.pi)
+    )
     box_handle = gym.create_actor(env, box_asset, box_pose, "box", i, 0)
-    color = gymapi.Vec3(np.random.uniform(0, 1), np.random.uniform(0, 1), np.random.uniform(0, 1))
-    gym.set_rigid_body_color(env, box_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, color)
+    color = gymapi.Vec3(
+        np.random.uniform(0, 1), np.random.uniform(0, 1), np.random.uniform(0, 1)
+    )
+    gym.set_rigid_body_color(
+        env, box_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, color
+    )
 
     # get global index of box in rigid body state tensor
     box_idx = gym.get_actor_rigid_body_index(env, box_handle, 0, gymapi.DOMAIN_SIM)
@@ -274,7 +311,9 @@ for i in range(num_envs):
     init_rot_list.append([hand_pose.r.x, hand_pose.r.y, hand_pose.r.z, hand_pose.r.w])
 
     # get global index of hand in rigid body state tensor
-    hand_idx = gym.find_actor_rigid_body_index(env, franka_handle, "panda_hand", gymapi.DOMAIN_SIM)
+    hand_idx = gym.find_actor_rigid_body_index(
+        env, franka_handle, "panda_hand", gymapi.DOMAIN_SIM
+    )
     hand_idxs.append(hand_idx)
 
 # point camera at middle env
@@ -292,7 +331,11 @@ init_pos = torch.Tensor(init_pos_list).view(num_envs, 3).to(device)
 init_rot = torch.Tensor(init_rot_list).view(num_envs, 4).to(device)
 
 # hand orientation for grasping
-down_q = torch.stack(num_envs * [torch.tensor([1.0, 0.0, 0.0, 0.0])]).to(device).view((num_envs, 4))
+down_q = (
+    torch.stack(num_envs * [torch.tensor([1.0, 0.0, 0.0, 0.0])])
+    .to(device)
+    .view((num_envs, 4))
+)
 
 # box corner coords, used to determine grasping yaw
 box_half_size = 0.5 * box_size
@@ -313,7 +356,7 @@ j_eef = jacobian[:, franka_hand_index - 1, :, :7]
 # get mass matrix tensor
 _massmatrix = gym.acquire_mass_matrix_tensor(sim, "franka")
 mm = gymtorch.wrap_tensor(_massmatrix)
-mm = mm[:, :7, :7]          # only need elements corresponding to the franka arm
+mm = mm[:, :7, :7]  # only need elements corresponding to the franka arm
 
 # get rigid body state tensor
 _rb_states = gym.acquire_rigid_body_state_tensor(sim)
@@ -334,7 +377,6 @@ effort_action = torch.zeros_like(pos_action)
 
 # simulation loop
 while not gym.query_viewer_has_closed(viewer):
-
     # step the physics
     gym.simulate(sim)
     gym.fetch_results(sim, True)
@@ -367,7 +409,9 @@ while not gym.query_viewer_has_closed(viewer):
     yaw_q = cube_grasping_yaw(box_rot, corners)
     box_yaw_dir = quat_axis(yaw_q, 0)
     hand_yaw_dir = quat_axis(hand_rot, 0)
-    yaw_dot = torch.bmm(box_yaw_dir.view(num_envs, 1, 3), hand_yaw_dir.view(num_envs, 3, 1)).squeeze(-1)
+    yaw_dot = torch.bmm(
+        box_yaw_dir.view(num_envs, 1, 3), hand_yaw_dir.view(num_envs, 3, 1)
+    ).squeeze(-1)
 
     # determine if we have reached the initial position; if so allow the hand to start moving to the box
     to_init = init_pos - hand_pos
@@ -377,13 +421,19 @@ while not gym.query_viewer_has_closed(viewer):
 
     # if hand is above box, descend to grasp offset
     # otherwise, seek a position above the box
-    above_box = ((box_dot >= 0.99) & (yaw_dot >= 0.95) & (box_dist < grasp_offset * 3)).squeeze(-1)
+    above_box = (
+        (box_dot >= 0.99) & (yaw_dot >= 0.95) & (box_dist < grasp_offset * 3)
+    ).squeeze(-1)
     grasp_pos = box_pos.clone()
-    grasp_pos[:, 2] = torch.where(above_box, box_pos[:, 2] + grasp_offset, box_pos[:, 2] + grasp_offset * 2.5)
+    grasp_pos[:, 2] = torch.where(
+        above_box, box_pos[:, 2] + grasp_offset, box_pos[:, 2] + grasp_offset * 2.5
+    )
 
     # compute goal position and orientation
     goal_pos = torch.where(return_to_start, init_pos, grasp_pos)
-    goal_rot = torch.where(return_to_start, init_rot, quat_mul(down_q, quat_conjugate(yaw_q)))
+    goal_rot = torch.where(
+        return_to_start, init_rot, quat_mul(down_q, quat_conjugate(yaw_q))
+    )
 
     # compute position and orientation error
     pos_err = goal_pos - hand_pos
@@ -393,7 +443,7 @@ while not gym.query_viewer_has_closed(viewer):
     # Deploy control based on type
     if controller == "ik":
         pos_action[:, :7] = dof_pos.squeeze(-1)[:, :7] + control_ik(dpose)
-    else:       # osc
+    else:  # osc
         effort_action[:, :7] = control_osc(dpose)
 
     # gripper actions depend on distance between hand and box
@@ -402,7 +452,11 @@ while not gym.query_viewer_has_closed(viewer):
     hand_restart = hand_restart | (box_pos[:, 2] > 0.6)
     keep_going = torch.logical_not(hand_restart)
     close_gripper = close_gripper & keep_going.unsqueeze(-1)
-    grip_acts = torch.where(close_gripper, torch.Tensor([[0., 0.]] * num_envs).to(device), torch.Tensor([[0.04, 0.04]] * num_envs).to(device))
+    grip_acts = torch.where(
+        close_gripper,
+        torch.Tensor([[0.0, 0.0]] * num_envs).to(device),
+        torch.Tensor([[0.04, 0.04]] * num_envs).to(device),
+    )
     pos_action[:, 7:9] = grip_acts
 
     # Deploy actions

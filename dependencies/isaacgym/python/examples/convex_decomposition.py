@@ -40,7 +40,9 @@ if args.use_gpu_pipeline:
     print("WARNING: Forcing CPU pipeline.")
 
 # create sim
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 if sim is None:
     raise Exception("Failed to create sim")
 
@@ -79,7 +81,9 @@ asset_options.override_com = True
 
 # use default convex decomposition params
 asset_options.vhacd_enabled = True
-asset0 = gym.load_asset(sim, asset_root, "urdf/ycb/011_banana/011_banana.urdf", asset_options)
+asset0 = gym.load_asset(
+    sim, asset_root, "urdf/ycb/011_banana/011_banana.urdf", asset_options
+)
 
 # convex decomposition with custom params
 asset_options.vhacd_enabled = True
@@ -89,23 +93,30 @@ asset1 = gym.load_asset(sim, asset_root, "urdf/ycb/025_mug/025_mug.urdf", asset_
 
 # don't use convex decomposition
 asset_options.vhacd_enabled = False
-asset2 = gym.load_asset(sim, asset_root, "urdf/ycb/061_foam_brick/061_foam_brick.urdf", asset_options)
+asset2 = gym.load_asset(
+    sim, asset_root, "urdf/ycb/061_foam_brick/061_foam_brick.urdf", asset_options
+)
 
 # convex decomposition with custom params
 asset_options.vhacd_enabled = True
 asset_options.vhacd_params = gymapi.VhacdParams()
 asset_options.vhacd_params.resolution = 500000
-asset3 = gym.load_asset(sim, asset_root, "urdf/ycb/010_potted_meat_can/010_potted_meat_can.urdf", asset_options)
+asset3 = gym.load_asset(
+    sim,
+    asset_root,
+    "urdf/ycb/010_potted_meat_can/010_potted_meat_can.urdf",
+    asset_options,
+)
 
 # create envs
 env = gym.create_env(sim, env_lower, env_upper, envs_per_row)
-actor = gym.create_actor(env, asset0, initial_pose, 'actor', 0, 1)
+actor = gym.create_actor(env, asset0, initial_pose, "actor", 0, 1)
 env = gym.create_env(sim, env_lower, env_upper, envs_per_row)
-actor = gym.create_actor(env, asset1, initial_pose, 'actor', 1, 1)
+actor = gym.create_actor(env, asset1, initial_pose, "actor", 1, 1)
 env = gym.create_env(sim, env_lower, env_upper, envs_per_row)
-actor = gym.create_actor(env, asset2, initial_pose, 'actor', 2, 1)
+actor = gym.create_actor(env, asset2, initial_pose, "actor", 2, 1)
 env = gym.create_env(sim, env_lower, env_upper, envs_per_row)
-actor = gym.create_actor(env, asset3, initial_pose, 'actor', 3, 1)
+actor = gym.create_actor(env, asset3, initial_pose, "actor", 3, 1)
 
 cam_pos = gymapi.Vec3(3, 0, 3)
 cam_target = gymapi.Vec3(0, 0, 0)
@@ -113,7 +124,6 @@ gym.viewer_camera_look_at(viewer, None, cam_pos, cam_target)
 
 # Simulate
 while not gym.query_viewer_has_closed(viewer):
-
     # step the physics
     gym.simulate(sim)
     gym.fetch_results(sim, True)
@@ -126,7 +136,7 @@ while not gym.query_viewer_has_closed(viewer):
     # This synchronizes the physics simulation with the rendering rate.
     gym.sync_frame_time(sim)
 
-print('Done')
+print("Done")
 
 gym.destroy_viewer(viewer)
 gym.destroy_sim(sim)

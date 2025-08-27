@@ -22,6 +22,6 @@
 # language governing permissions and limitations under the Apache License.
 #
 
-# This file makes this module importable from python, which avoids a warning 
+# This file makes this module importable from python, which avoids a warning
 # when initializing the SdrRegistry.
 

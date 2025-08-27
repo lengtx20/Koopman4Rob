@@ -7,14 +7,16 @@
 
 
 import numpy as np
-from numpy.random import choice
 from scipy import interpolate
 
-from isaacgym import gymutil, gymapi
-from math import sqrt
 
-
-def random_uniform_terrain(terrain, min_height, max_height, step=1, downsampled_scale=None,):
+def random_uniform_terrain(
+    terrain,
+    min_height,
+    max_height,
+    step=1,
+    downsampled_scale=None,
+):
     """
     Generate a uniform noise terrain
 
@@ -35,16 +37,29 @@ def random_uniform_terrain(terrain, min_height, max_height, step=1, downsampled_
     step = int(step / terrain.vertical_scale)
 
     heights_range = np.arange(min_height, max_height + step, step)
-    height_field_downsampled = np.random.choice(heights_range, (int(terrain.width * terrain.horizontal_scale / downsampled_scale), int(
-        terrain.length * terrain.horizontal_scale / downsampled_scale)))
+    height_field_downsampled = np.random.choice(
+        heights_range,
+        (
+            int(terrain.width * terrain.horizontal_scale / downsampled_scale),
+            int(terrain.length * terrain.horizontal_scale / downsampled_scale),
+        ),
+    )
 
-    x = np.linspace(0, terrain.width * terrain.horizontal_scale, height_field_downsampled.shape[0])
-    y = np.linspace(0, terrain.length * terrain.horizontal_scale, height_field_downsampled.shape[1])
+    x = np.linspace(
+        0, terrain.width * terrain.horizontal_scale, height_field_downsampled.shape[0]
+    )
+    y = np.linspace(
+        0, terrain.length * terrain.horizontal_scale, height_field_downsampled.shape[1]
+    )
 
-    f = interpolate.interp2d(y, x, height_field_downsampled, kind='linear')
+    f = interpolate.interp2d(y, x, height_field_downsampled, kind="linear")
 
-    x_upsampled = np.linspace(0, terrain.width * terrain.horizontal_scale, terrain.width)
-    y_upsampled = np.linspace(0, terrain.length * terrain.horizontal_scale, terrain.length)
+    x_upsampled = np.linspace(
+        0, terrain.width * terrain.horizontal_scale, terrain.width
+    )
+    y_upsampled = np.linspace(
+        0, terrain.length * terrain.horizontal_scale, terrain.length
+    )
     z_upsampled = np.rint(f(y_upsampled, x_upsampled))
 
     terrain.height_field_raw += z_upsampled.astype(np.int16)
@@ -66,12 +81,16 @@ def sloped_terrain(terrain, slope=1):
     y = np.arange(0, terrain.length)
     xx, yy = np.meshgrid(x, y, sparse=True)
     xx = xx.reshape(terrain.width, 1)
-    max_height = int(slope * (terrain.horizontal_scale / terrain.vertical_scale) * terrain.width)
-    terrain.height_field_raw[:, np.arange(terrain.length)] += (max_height * xx / terrain.width).astype(terrain.height_field_raw.dtype)
+    max_height = int(
+        slope * (terrain.horizontal_scale / terrain.vertical_scale) * terrain.width
+    )
+    terrain.height_field_raw[:, np.arange(terrain.length)] += (
+        max_height * xx / terrain.width
+    ).astype(terrain.height_field_raw.dtype)
     return terrain
 
 
-def pyramid_sloped_terrain(terrain, slope=1, platform_size=1.):
+def pyramid_sloped_terrain(terrain, slope=1, platform_size=1.0):
     """
     Generate a sloped terrain
 
@@ -87,12 +106,18 @@ def pyramid_sloped_terrain(terrain, slope=1, platform_size=1.):
     center_x = int(terrain.width / 2)
     center_y = int(terrain.length / 2)
     xx, yy = np.meshgrid(x, y, sparse=True)
-    xx = (center_x - np.abs(center_x-xx)) / center_x
-    yy = (center_y - np.abs(center_y-yy)) / center_y
+    xx = (center_x - np.abs(center_x - xx)) / center_x
+    yy = (center_y - np.abs(center_y - yy)) / center_y
     xx = xx.reshape(terrain.width, 1)
     yy = yy.reshape(1, terrain.length)
-    max_height = int(slope * (terrain.horizontal_scale / terrain.vertical_scale) * (terrain.width / 2))
-    terrain.height_field_raw += (max_height * xx * yy).astype(terrain.height_field_raw.dtype)
+    max_height = int(
+        slope
+        * (terrain.horizontal_scale / terrain.vertical_scale)
+        * (terrain.width / 2)
+    )
+    terrain.height_field_raw += (max_height * xx * yy).astype(
+        terrain.height_field_raw.dtype
+    )
 
     platform_size = int(platform_size / terrain.horizontal_scale / 2)
     x1 = terrain.width // 2 - platform_size
@@ -106,7 +131,9 @@ def pyramid_sloped_terrain(terrain, slope=1, platform_size=1.):
     return terrain
 
 
-def discrete_obstacles_terrain(terrain, max_height, min_size, max_size, num_rects, platform_size=1.):
+def discrete_obstacles_terrain(
+    terrain, max_height, min_size, max_size, num_rects, platform_size=1.0
+):
     """
     Generate a terrain with gaps
 
@@ -134,9 +161,11 @@ def discrete_obstacles_terrain(terrain, max_height, min_size, max_size, num_rect
     for _ in range(num_rects):
         width = np.random.choice(width_range)
         length = np.random.choice(length_range)
-        start_i = np.random.choice(range(0, i-width, 4))
-        start_j = np.random.choice(range(0, j-length, 4))
-        terrain.height_field_raw[start_i:start_i+width, start_j:start_j+length] = np.random.choice(height_range)
+        start_i = np.random.choice(range(0, i - width, 4))
+        start_j = np.random.choice(range(0, j - length, 4))
+        terrain.height_field_raw[
+            start_i : start_i + width, start_j : start_j + length
+        ] = np.random.choice(height_range)
 
     x1 = (terrain.width - platform_size) // 2
     x2 = (terrain.width + platform_size) // 2
@@ -146,7 +175,7 @@ def discrete_obstacles_terrain(terrain, max_height, min_size, max_size, num_rect
     return terrain
 
 
-def wave_terrain(terrain, num_waves=1, amplitude=1.):
+def wave_terrain(terrain, num_waves=1, amplitude=1.0):
     """
     Generate a wavy terrain
 
@@ -156,7 +185,7 @@ def wave_terrain(terrain, num_waves=1, amplitude=1.):
     Returns:
         terrain (SubTerrain): update terrain
     """
-    amplitude = int(0.5*amplitude / terrain.vertical_scale)
+    amplitude = int(0.5 * amplitude / terrain.vertical_scale)
     if num_waves > 0:
         div = terrain.length / (num_waves * np.pi * 2)
         x = np.arange(0, terrain.width)
@@ -164,8 +193,9 @@ def wave_terrain(terrain, num_waves=1, amplitude=1.):
         xx, yy = np.meshgrid(x, y, sparse=True)
         xx = xx.reshape(terrain.width, 1)
         yy = yy.reshape(1, terrain.length)
-        terrain.height_field_raw += (amplitude*np.cos(yy / div) + amplitude*np.sin(xx / div)).astype(
-            terrain.height_field_raw.dtype)
+        terrain.height_field_raw += (
+            amplitude * np.cos(yy / div) + amplitude * np.sin(xx / div)
+        ).astype(terrain.height_field_raw.dtype)
     return terrain
 
 
@@ -187,12 +217,12 @@ def stairs_terrain(terrain, step_width, step_height):
     num_steps = terrain.width // step_width
     height = step_height
     for i in range(num_steps):
-        terrain.height_field_raw[i * step_width: (i + 1) * step_width, :] += height
+        terrain.height_field_raw[i * step_width : (i + 1) * step_width, :] += height
         height += step_height
     return terrain
 
 
-def pyramid_stairs_terrain(terrain, step_width, step_height, platform_size=1.):
+def pyramid_stairs_terrain(terrain, step_width, step_height, platform_size=1.0):
     """
     Generate stairs
 
@@ -220,11 +250,13 @@ def pyramid_stairs_terrain(terrain, step_width, step_height, platform_size=1.):
         start_y += step_width
         stop_y -= step_width
         height += step_height
-        terrain.height_field_raw[start_x: stop_x, start_y: stop_y] = height
+        terrain.height_field_raw[start_x:stop_x, start_y:stop_y] = height
     return terrain
 
 
-def stepping_stones_terrain(terrain, stone_size, stone_distance, max_height, platform_size=1., depth=-10):
+def stepping_stones_terrain(
+    terrain, stone_size, stone_distance, max_height, platform_size=1.0, depth=-10
+):
     """
     Generate a stepping stones terrain
 
@@ -243,7 +275,7 @@ def stepping_stones_terrain(terrain, stone_size, stone_distance, max_height, pla
     stone_distance = int(stone_distance / terrain.horizontal_scale)
     max_height = int(max_height / terrain.vertical_scale)
     platform_size = int(platform_size / terrain.horizontal_scale)
-    height_range = np.arange(-max_height-1, max_height, step=1)
+    height_range = np.arange(-max_height - 1, max_height, step=1)
 
     start_x = 0
     start_y = 0
@@ -254,11 +286,15 @@ def stepping_stones_terrain(terrain, stone_size, stone_distance, max_height, pla
             start_x = np.random.randint(0, stone_size)
             # fill first hole
             stop_x = max(0, start_x - stone_distance)
-            terrain.height_field_raw[0: stop_x, start_y: stop_y] = np.random.choice(height_range)
+            terrain.height_field_raw[0:stop_x, start_y:stop_y] = np.random.choice(
+                height_range
+            )
             # fill row
             while start_x < terrain.width:
                 stop_x = min(terrain.width, start_x + stone_size)
-                terrain.height_field_raw[start_x: stop_x, start_y: stop_y] = np.random.choice(height_range)
+                terrain.height_field_raw[start_x:stop_x, start_y:stop_y] = (
+                    np.random.choice(height_range)
+                )
                 start_x += stone_size + stone_distance
             start_y += stone_size + stone_distance
     elif terrain.width > terrain.length:
@@ -267,11 +303,15 @@ def stepping_stones_terrain(terrain, stone_size, stone_distance, max_height, pla
             start_y = np.random.randint(0, stone_size)
             # fill first hole
             stop_y = max(0, start_y - stone_distance)
-            terrain.height_field_raw[start_x: stop_x, 0: stop_y] = np.random.choice(height_range)
+            terrain.height_field_raw[start_x:stop_x, 0:stop_y] = np.random.choice(
+                height_range
+            )
             # fill column
             while start_y < terrain.length:
                 stop_y = min(terrain.length, start_y + stone_size)
-                terrain.height_field_raw[start_x: stop_x, start_y: stop_y] = np.random.choice(height_range)
+                terrain.height_field_raw[start_x:stop_x, start_y:stop_y] = (
+                    np.random.choice(height_range)
+                )
                 start_y += stone_size + stone_distance
             start_x += stone_size + stone_distance
 
@@ -283,7 +323,9 @@ def stepping_stones_terrain(terrain, stone_size, stone_distance, max_height, pla
     return terrain
 
 
-def convert_heightfield_to_trimesh(height_field_raw, horizontal_scale, vertical_scale, slope_threshold=None):
+def convert_heightfield_to_trimesh(
+    height_field_raw, horizontal_scale, vertical_scale, slope_threshold=None
+):
     """
     Convert a heightfield array to a triangle mesh represented by vertices and triangles.
     Optionally, corrects vertical surfaces above the provide slope threshold:
@@ -308,50 +350,70 @@ def convert_heightfield_to_trimesh(height_field_raw, horizontal_scale, vertical_
     num_rows = hf.shape[0]
     num_cols = hf.shape[1]
 
-    y = np.linspace(0, (num_cols-1)*horizontal_scale, num_cols)
-    x = np.linspace(0, (num_rows-1)*horizontal_scale, num_rows)
+    y = np.linspace(0, (num_cols - 1) * horizontal_scale, num_cols)
+    x = np.linspace(0, (num_rows - 1) * horizontal_scale, num_rows)
     yy, xx = np.meshgrid(y, x)
 
     if slope_threshold is not None:
-
         slope_threshold *= horizontal_scale / vertical_scale
         move_x = np.zeros((num_rows, num_cols))
         move_y = np.zeros((num_rows, num_cols))
         move_corners = np.zeros((num_rows, num_cols))
-        move_x[:num_rows-1, :] += (hf[1:num_rows, :] - hf[:num_rows-1, :] > slope_threshold)
-        move_x[1:num_rows, :] -= (hf[:num_rows-1, :] - hf[1:num_rows, :] > slope_threshold)
-        move_y[:, :num_cols-1] += (hf[:, 1:num_cols] - hf[:, :num_cols-1] > slope_threshold)
-        move_y[:, 1:num_cols] -= (hf[:, :num_cols-1] - hf[:, 1:num_cols] > slope_threshold)
-        move_corners[:num_rows-1, :num_cols-1] += (hf[1:num_rows, 1:num_cols] - hf[:num_rows-1, :num_cols-1] > slope_threshold)
-        move_corners[1:num_rows, 1:num_cols] -= (hf[:num_rows-1, :num_cols-1] - hf[1:num_rows, 1:num_cols] > slope_threshold)
-        xx += (move_x + move_corners*(move_x == 0)) * horizontal_scale
-        yy += (move_y + move_corners*(move_y == 0)) * horizontal_scale
+        move_x[: num_rows - 1, :] += (
+            hf[1:num_rows, :] - hf[: num_rows - 1, :] > slope_threshold
+        )
+        move_x[1:num_rows, :] -= (
+            hf[: num_rows - 1, :] - hf[1:num_rows, :] > slope_threshold
+        )
+        move_y[:, : num_cols - 1] += (
+            hf[:, 1:num_cols] - hf[:, : num_cols - 1] > slope_threshold
+        )
+        move_y[:, 1:num_cols] -= (
+            hf[:, : num_cols - 1] - hf[:, 1:num_cols] > slope_threshold
+        )
+        move_corners[: num_rows - 1, : num_cols - 1] += (
+            hf[1:num_rows, 1:num_cols] - hf[: num_rows - 1, : num_cols - 1]
+            > slope_threshold
+        )
+        move_corners[1:num_rows, 1:num_cols] -= (
+            hf[: num_rows - 1, : num_cols - 1] - hf[1:num_rows, 1:num_cols]
+            > slope_threshold
+        )
+        xx += (move_x + move_corners * (move_x == 0)) * horizontal_scale
+        yy += (move_y + move_corners * (move_y == 0)) * horizontal_scale
 
     # create triangle mesh vertices and triangles from the heightfield grid
-    vertices = np.zeros((num_rows*num_cols, 3), dtype=np.float32)
+    vertices = np.zeros((num_rows * num_cols, 3), dtype=np.float32)
     vertices[:, 0] = xx.flatten()
     vertices[:, 1] = yy.flatten()
     vertices[:, 2] = hf.flatten() * vertical_scale
-    triangles = -np.ones((2*(num_rows-1)*(num_cols-1), 3), dtype=np.uint32)
+    triangles = -np.ones((2 * (num_rows - 1) * (num_cols - 1), 3), dtype=np.uint32)
     for i in range(num_rows - 1):
-        ind0 = np.arange(0, num_cols-1) + i*num_cols
+        ind0 = np.arange(0, num_cols - 1) + i * num_cols
         ind1 = ind0 + 1
         ind2 = ind0 + num_cols
         ind3 = ind2 + 1
-        start = 2*i*(num_cols-1)
-        stop = start + 2*(num_cols-1)
+        start = 2 * i * (num_cols - 1)
+        stop = start + 2 * (num_cols - 1)
         triangles[start:stop:2, 0] = ind0
         triangles[start:stop:2, 1] = ind3
         triangles[start:stop:2, 2] = ind1
-        triangles[start+1:stop:2, 0] = ind0
-        triangles[start+1:stop:2, 1] = ind2
-        triangles[start+1:stop:2, 2] = ind3
+        triangles[start + 1 : stop : 2, 0] = ind0
+        triangles[start + 1 : stop : 2, 1] = ind2
+        triangles[start + 1 : stop : 2, 2] = ind3
 
     return vertices, triangles
 
 
 class SubTerrain:
-    def __init__(self, terrain_name="terrain", width=256, length=256, vertical_scale=1.0, horizontal_scale=1.0):
+    def __init__(
+        self,
+        terrain_name="terrain",
+        width=256,
+        length=256,
+        vertical_scale=1.0,
+        horizontal_scale=1.0,
+    ):
         self.terrain_name = terrain_name
         self.vertical_scale = vertical_scale
         self.horizontal_scale = horizontal_scale

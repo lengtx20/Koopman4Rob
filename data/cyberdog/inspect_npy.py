@@ -2,6 +2,7 @@ import numpy as np
 import argparse
 import os
 
+
 def inspect_npy_file(file_path, show_examples=True, num_examples=3):
     if not os.path.exists(file_path):
         print(f"文件不存在: {file_path}")
@@ -22,7 +23,7 @@ def inspect_npy_file(file_path, show_examples=True, num_examples=3):
     else:
         print(f"不是 ndarray，类型为 {type(data)}，无法显示 shape。")
 
-    if data.dtype == 'object':
+    if data.dtype == "object":
         print("\n 注意：这是对象数组，数据中可能包含字典、列表或其他复杂结构。")
         if isinstance(data[0], dict):
             print(f"字段示例：{list(data[0].keys())}")
@@ -46,4 +47,6 @@ if __name__ == "__main__":
     parser.add_argument("--num", type=int, default=3, help="要显示的样本个数")
     args = parser.parse_args()
 
-    inspect_npy_file(args.file, show_examples=not args.no_preview, num_examples=args.num)
+    inspect_npy_file(
+        args.file, show_examples=not args.no_preview, num_examples=args.num
+    )

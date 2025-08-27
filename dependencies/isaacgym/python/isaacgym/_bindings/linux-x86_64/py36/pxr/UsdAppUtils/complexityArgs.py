@@ -22,6 +22,7 @@
 # language governing permissions and limitations under the Apache License.
 #
 
+
 class RefinementComplexities(object):
     """
     An enum-like container of standard complexity settings.
@@ -96,9 +97,7 @@ class RefinementComplexities(object):
         """
         if comp not in cls._ordered:
             raise ValueError("Invalid complexity: {}".format(comp))
-        nextIndex = min(
-            len(cls._ordered) - 1,
-            cls._ordered.index(comp) + 1)
+        nextIndex = min(len(cls._ordered) - 1, cls._ordered.index(comp) + 1)
         return cls._ordered[nextIndex]
 
     @classmethod
@@ -113,8 +112,7 @@ class RefinementComplexities(object):
         return cls._ordered[prevIndex]
 
 
-def AddCmdlineArgs(argsParser, defaultValue=RefinementComplexities.LOW,
-        altHelpText=''):
+def AddCmdlineArgs(argsParser, defaultValue=RefinementComplexities.LOW, altHelpText=""):
     """
     Adds complexity-related command line arguments to argsParser.
 
@@ -123,10 +121,14 @@ def AddCmdlineArgs(argsParser, defaultValue=RefinementComplexities.LOW,
     """
     helpText = altHelpText
     if not helpText:
-        helpText = ('level of refinement to use (default=%(default)s)')
+        helpText = "level of refinement to use (default=%(default)s)"
 
-    argsParser.add_argument('--complexity', '-c', action='store',
+    argsParser.add_argument(
+        "--complexity",
+        "-c",
+        action="store",
         type=RefinementComplexities.fromId,
         default=defaultValue,
         choices=[c for c in RefinementComplexities.ordered()],
-        help=helpText)
+        help=helpText,
+    )

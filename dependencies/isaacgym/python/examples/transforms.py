@@ -48,7 +48,9 @@ sim_params.use_gpu_pipeline = False
 if args.use_gpu_pipeline:
     print("WARNING: Forcing CPU pipeline.")
 
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 
 if sim is None:
     print("*** Failed to create sim")
@@ -84,7 +86,6 @@ env_upper = gymapi.Vec3(spacing, spacing, spacing)
 
 
 class Cabinet:
-
     DRAWER_GRASP = gymapi.Vec3(0.3, 0.0, 0.01)
     LEFT_DOOR_GRASP = gymapi.Vec3(0.03, 0.35, 0.185)
     RIGHT_DOOR_GRASP = gymapi.Vec3(0.03, -0.35, 0.185)
@@ -99,28 +100,54 @@ class Cabinet:
         self.actor = actor
 
     def get_grasp_points(self):
-
-        poses = gym.get_actor_rigid_body_states(self.env, self.actor, gymapi.STATE_POS)['pose']
+        poses = gym.get_actor_rigid_body_states(self.env, self.actor, gymapi.STATE_POS)[
+            "pose"
+        ]
 
         # Get pose for all of the handles
-        top_drawer_handle_pose = gymapi.Transform.from_buffer(poses[self.TOP_DRAWER_INDEX])
-        bottom_drawer_handle_pose = gymapi.Transform.from_buffer(poses[self.BOTTOM_DRAWER_INDEX])
-        left_door_handle_pose = gymapi.Transform.from_buffer(poses[self.LEFT_DOOR_INDEX])
-        right_door_handle_pose = gymapi.Transform.from_buffer(poses[self.RIGHT_DOOR_INDEX])
+        top_drawer_handle_pose = gymapi.Transform.from_buffer(
+            poses[self.TOP_DRAWER_INDEX]
+        )
+        bottom_drawer_handle_pose = gymapi.Transform.from_buffer(
+            poses[self.BOTTOM_DRAWER_INDEX]
+        )
+        left_door_handle_pose = gymapi.Transform.from_buffer(
+            poses[self.LEFT_DOOR_INDEX]
+        )
+        right_door_handle_pose = gymapi.Transform.from_buffer(
+            poses[self.RIGHT_DOOR_INDEX]
+        )
 
         # Offset drawer transforms to compute grasp locations
         top_drawer_point = top_drawer_handle_pose.transform_point(self.DRAWER_GRASP)
-        bottom_drawer_point = bottom_drawer_handle_pose.transform_point(self.DRAWER_GRASP)
-        left_door_handle_point = left_door_handle_pose.transform_point(self.LEFT_DOOR_GRASP)
-        right_door_handle_point = right_door_handle_pose.transform_point(self.RIGHT_DOOR_GRASP)
+        bottom_drawer_point = bottom_drawer_handle_pose.transform_point(
+            self.DRAWER_GRASP
+        )
+        left_door_handle_point = left_door_handle_pose.transform_point(
+            self.LEFT_DOOR_GRASP
+        )
+        right_door_handle_point = right_door_handle_pose.transform_point(
+            self.RIGHT_DOOR_GRASP
+        )
 
         # Create transform from grasp location and handle rotation
         top_drawer_grasp = gymapi.Transform(top_drawer_point, top_drawer_handle_pose.r)
-        bottom_drawer_grasp = gymapi.Transform(bottom_drawer_point, bottom_drawer_handle_pose.r)
-        left_door_handle_grasp = gymapi.Transform(left_door_handle_point, left_door_handle_pose.r)
-        right_door_handle_grasp = gymapi.Transform(right_door_handle_point, right_door_handle_pose.r)
+        bottom_drawer_grasp = gymapi.Transform(
+            bottom_drawer_point, bottom_drawer_handle_pose.r
+        )
+        left_door_handle_grasp = gymapi.Transform(
+            left_door_handle_point, left_door_handle_pose.r
+        )
+        right_door_handle_grasp = gymapi.Transform(
+            right_door_handle_point, right_door_handle_pose.r
+        )
 
-        return top_drawer_grasp, bottom_drawer_grasp, left_door_handle_grasp, right_door_handle_grasp
+        return (
+            top_drawer_grasp,
+            bottom_drawer_grasp,
+            left_door_handle_grasp,
+            right_door_handle_grasp,
+        )
 
 
 cabinets = []
@@ -141,8 +168,8 @@ for i in range(num_envs):
     dof_props = gym.get_actor_dof_properties(env, ahandle)
 
     # Set stiffness and damping of joint drives
-    dof_props['stiffness'].fill(1000000.0)
-    dof_props['damping'].fill(500.0)
+    dof_props["stiffness"].fill(1000000.0)
+    dof_props["damping"].fill(500.0)
     dof_props["driveMode"] = gymapi.DOF_MODE_POS
     gym.set_actor_dof_properties(env, ahandle, dof_props)
     cabinets.append(cab)
@@ -158,10 +185,11 @@ axes_geom = gymutil.AxesGeometry(0.1)
 # Create a wireframe sphere
 sphere_rot = gymapi.Quat.from_euler_zyx(0.5 * math.pi, 0, 0)
 sphere_pose = gymapi.Transform(r=sphere_rot)
-sphere_geom = gymutil.WireframeSphereGeometry(0.02, 12, 12, sphere_pose, color=(1, 1, 0))
+sphere_geom = gymutil.WireframeSphereGeometry(
+    0.02, 12, 12, sphere_pose, color=(1, 1, 0)
+)
 
 while not gym.query_viewer_has_closed(viewer):
-
     # Step the physics
     gym.simulate(sim)
     gym.fetch_results(sim, True)
@@ -173,7 +201,12 @@ while not gym.query_viewer_has_closed(viewer):
         cab = cabinets[i]
 
         # Get the transforms we want to visualize
-        top_drawer_grasp, bottom_drawer_grasp, left_door_handle_grasp, right_door_handle_grasp = cab.get_grasp_points()
+        (
+            top_drawer_grasp,
+            bottom_drawer_grasp,
+            left_door_handle_grasp,
+            right_door_handle_grasp,
+        ) = cab.get_grasp_points()
 
         # Top drawer
         gymutil.draw_lines(axes_geom, gym, viewer, cab.env, top_drawer_grasp)

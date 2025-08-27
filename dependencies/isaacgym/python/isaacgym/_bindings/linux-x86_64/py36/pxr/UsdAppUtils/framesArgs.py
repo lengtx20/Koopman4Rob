@@ -22,6 +22,7 @@
 # language governing permissions and limitations under the Apache License.
 #
 
+
 def _GetFloatStringPrecision(floatString):
     """
     Gets the floating point precision specified by floatString.
@@ -37,26 +38,28 @@ def _GetFloatStringPrecision(floatString):
     if not floatString:
         return floatPrecision
 
-    floatStringParts = floatString.split('.')
+    floatStringParts = floatString.split(".")
     if len(floatStringParts) > 1:
         floatPrecision = len(floatStringParts[1])
 
     return floatPrecision
+
 
 class FrameSpecIterator(object):
     """
     A simple iterator object that handles splitting multiple comma-separated
     FrameSpecs into their equivalent UsdUtils.TimeCodeRanges, and then yields
     all of the time codes in all of those ranges sequentially when iterated.
-    
+
     This object also stores the minimum floating point precision required to
     disambiguate any neighboring time codes in the FrameSpecs given. This can
     be used to validate that the frame placeholder in a frame format string has
     enough precision to uniquely identify every frame without collisions.
     """
+
     from pxr import UsdUtils
 
-    FRAMESPEC_SEPARATOR = ','
+    FRAMESPEC_SEPARATOR = ","
 
     def __init__(self, frameSpec):
         from pxr import UsdUtils
@@ -68,17 +71,16 @@ class FrameSpecIterator(object):
         self._timeCodeRanges = []
         subFrameSpecs = frameSpec.split(self.FRAMESPEC_SEPARATOR)
         for subFrameSpec in subFrameSpecs:
-            timeCodeRange = UsdUtils.TimeCodeRange.CreateFromFrameSpec(
-                subFrameSpec)
+            timeCodeRange = UsdUtils.TimeCodeRange.CreateFromFrameSpec(subFrameSpec)
             self._timeCodeRanges.append(timeCodeRange)
 
             specParts = subFrameSpec.split(
-                UsdUtils.TimeCodeRange.Tokens.StrideSeparator)
+                UsdUtils.TimeCodeRange.Tokens.StrideSeparator
+            )
             if len(specParts) == 2:
                 stride = specParts[1]
                 stridePrecision = _GetFloatStringPrecision(stride)
-                self._minFloatPrecision = max(self._minFloatPrecision,
-                    stridePrecision)
+                self._minFloatPrecision = max(self._minFloatPrecision, stridePrecision)
 
     def __iter__(self):
         for timeCodeRange in self._timeCodeRanges:
@@ -90,7 +92,7 @@ class FrameSpecIterator(object):
         return self._minFloatPrecision
 
 
-def AddCmdlineArgs(argsParser, altDefaultTimeHelpText='', altFramesHelpText=''):
+def AddCmdlineArgs(argsParser, altDefaultTimeHelpText="", altFramesHelpText=""):
     """
     Adds frame-related command line arguments to argsParser.
 
@@ -108,28 +110,38 @@ def AddCmdlineArgs(argsParser, altDefaultTimeHelpText='', altFramesHelpText=''):
     helpText = altDefaultTimeHelpText
     if not helpText:
         helpText = (
-            'explicitly operate at the Default time code (the default '
-            'behavior is to operate at the Earliest time code)')
-    timeGroup.add_argument('--defaultTime', '-d', action='store_true',
-        dest='defaultTime', help=helpText)
+            "explicitly operate at the Default time code (the default "
+            "behavior is to operate at the Earliest time code)"
+        )
+    timeGroup.add_argument(
+        "--defaultTime", "-d", action="store_true", dest="defaultTime", help=helpText
+    )
 
     helpText = altFramesHelpText
     if not helpText:
         helpText = (
-            'specify FrameSpec(s) of the time codes to operate on - A '
-            'FrameSpec consists of up to three floating point values for the '
-            'start time code, end time code, and stride of a time code range. '
-            'A single time code can be specified, or a start and end time '
-            'code can be specified separated by a colon (:). When a start '
-            'and end time code are specified, the stride may optionally be '
-            'specified as well, separating it from the start and end time '
-            'codes with (x). Multiple FrameSpecs can be combined as a '
-            'comma-separated list. The following are examples of valid '
-            'FrameSpecs: 123 - 101:105 - 105:101 - 101:109x2 - 101:110x2 - '
-            '101:104x0.5')
-    timeGroup.add_argument('--frames', '-f', action='store', type=str,
-        dest='frames', metavar='FRAMESPEC[,FRAMESPEC...]',
-        help=helpText)
+            "specify FrameSpec(s) of the time codes to operate on - A "
+            "FrameSpec consists of up to three floating point values for the "
+            "start time code, end time code, and stride of a time code range. "
+            "A single time code can be specified, or a start and end time "
+            "code can be specified separated by a colon (:). When a start "
+            "and end time code are specified, the stride may optionally be "
+            "specified as well, separating it from the start and end time "
+            "codes with (x). Multiple FrameSpecs can be combined as a "
+            "comma-separated list. The following are examples of valid "
+            "FrameSpecs: 123 - 101:105 - 105:101 - 101:109x2 - 101:110x2 - "
+            "101:104x0.5"
+        )
+    timeGroup.add_argument(
+        "--frames",
+        "-f",
+        action="store",
+        type=str,
+        dest="frames",
+        metavar="FRAMESPEC[,FRAMESPEC...]",
+        help=helpText,
+    )
+
 
 def GetFramePlaceholder(frameFormat):
     """
@@ -147,7 +159,7 @@ def GetFramePlaceholder(frameFormat):
 
     import re
 
-    PLACEHOLDER_PATTERN = r'^[^#]*(?P<placeholder>#+(\.#+)?)[^#]*$'
+    PLACEHOLDER_PATTERN = r"^[^#]*(?P<placeholder>#+(\.#+)?)[^#]*$"
 
     matches = re.search(PLACEHOLDER_PATTERN, frameFormat)
     if not matches:
@@ -156,6 +168,7 @@ def GetFramePlaceholder(frameFormat):
     placeholder = matches.group(1)
 
     return placeholder
+
 
 def ConvertFramePlaceholderToFloatSpec(frameFormat):
     """
@@ -194,16 +207,20 @@ def ConvertFramePlaceholderToFloatSpec(frameFormat):
     # The hashes after the dot, if any, determine the precision. If there are
     # none, integer frame numbers are used.
     specPrecision = 0
-    parts = placeholder.split('.')
+    parts = placeholder.split(".")
     if len(parts) > 1:
         specPrecision = len(parts[1])
 
-    floatSpec = ('{frame:' +
-        '{fill}{width}.{precision}f'.format(fill=specFill,
-            width=specWidth, precision=specPrecision) +
-        '}')
+    floatSpec = (
+        "{frame:"
+        + "{fill}{width}.{precision}f".format(
+            fill=specFill, width=specWidth, precision=specPrecision
+        )
+        + "}"
+    )
 
     return frameFormat.replace(placeholder, floatSpec)
+
 
 def ValidateCmdlineArgs(argsParser, args, frameFormatArgName=None):
     """
@@ -239,27 +256,38 @@ def ValidateCmdlineArgs(argsParser, args, frameFormatArgName=None):
 
         if frameFormatArgName is not None:
             if not frameFormat:
-                argsParser.error('%s must contain exactly one frame number '
+                argsParser.error(
+                    "%s must contain exactly one frame number "
                     'placeholder of the form "###"" or "###.###". Note that '
-                    'the number of hash marks is variable in each group.' %
-                    frameFormatArgName)
+                    "the number of hash marks is variable in each group."
+                    % frameFormatArgName
+                )
 
             placeholderPrecision = _GetFloatStringPrecision(framePlaceholder)
 
             if placeholderPrecision < args.frames.minFloatPrecision:
-                argsParser.error('The given FrameSpecs require a minimum '
-                    'floating point precision of %d, but the frame '
-                    'placeholder in %s only specified a precision of %d (%s). '
-                    'The precision of the frame placeholder must be equal to '
-                    'or greater than %d.' % (args.frames.minFloatPrecision,
-                        frameFormatArgName, placeholderPrecision,
-                        framePlaceholder,args.frames.minFloatPrecision))
+                argsParser.error(
+                    "The given FrameSpecs require a minimum "
+                    "floating point precision of %d, but the frame "
+                    "placeholder in %s only specified a precision of %d (%s). "
+                    "The precision of the frame placeholder must be equal to "
+                    "or greater than %d."
+                    % (
+                        args.frames.minFloatPrecision,
+                        frameFormatArgName,
+                        placeholderPrecision,
+                        framePlaceholder,
+                        args.frames.minFloatPrecision,
+                    )
+                )
 
             setattr(args, frameFormatArgName, frameFormat)
     else:
         if frameFormat:
-            argsParser.error('%s cannot contain a frame number placeholder '
-                'when not operating on a frame range.' % frameFormatArgName)
+            argsParser.error(
+                "%s cannot contain a frame number placeholder "
+                "when not operating on a frame range." % frameFormatArgName
+            )
 
         if args.defaultTime:
             args.frames = [Usd.TimeCode.Default()]

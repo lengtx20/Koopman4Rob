@@ -1,4 +1,4 @@
-""" Train data from Manipulation with Vision dataset using Deep Koopman model """
+"""Train data from Manipulation with Vision dataset using Deep Koopman model"""
 
 import numpy as np
 import torch
@@ -6,39 +6,46 @@ import torch.optim as optim
 from torch.nn import MSELoss
 from models.deep_koopman import Deep_Koopman
 from runner.koopman_runner import KoopmanRunner
-from data.load_pickle_data import load_pickle_data
 import os
 
-def load_data(mode, data_dir, ratio: float=0.8):
+
+def load_data(mode, data_dir, ratio: float = 0.8):
     traj = []
     # min_length = 200
     for i in range(64):
-        file_name = f'{i}.npy'
+        file_name = f"{i}.npy"
         file_path = os.path.join(data_dir, file_name)
         data = np.load(file_path)
         traj.append(data)
-    data = np.concatenate(traj, axis=0)
-    print(f"[INFO] Data shape: {data.shape}")
     
     length = data.shape[0]
     if mode == "test":
-        train_data = data[1000:1010]
-        val_data = data[9000:9010]
+        train_traj = traj[: int(len(traj) * ratio)]
+        val_traj = traj[int(len(traj) * ratio) :]
+        train_traj = train_traj[:2]
+        train_data = np.concatenate(train_traj, axis=0)
+        val_data = np.concatenate(val_traj, axis=0)
+        print(f"[INFO] Train data shape: {train_data.shape}")
+        print(f"[INFO] Val data shape: {val_data.shape}")
     elif mode == "train":
-        split_id = int(length * ratio)
-        train_data = data[:split_id, :]
-        val_data = data[split_id:, :]
+        train_traj = traj[: int(len(traj) * ratio)]
+        val_traj = traj[int(len(traj) * ratio) :]
+        train_data = np.concatenate(train_traj, axis=0)
+        val_data = np.concatenate(val_traj, axis=0)
+        print(f"[INFO] Train data shape: {train_data.shape}")
+        print(f"[INFO] Val data shape: {val_data.shape}")
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
     return train_data, val_data
 
+
 def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
     """
-        mode:       select between train / test
-        data_path:  path to the npy file.
-                    The structure of the data need to be (num_sample, x_t + a_t + x_t1).
-        model_dir:  path to the Deep Koopman model.
-                    The model will be save to (or load from) this dir when training (or testing).
+    mode:       select between train / test
+    data_path:  path to the npy file.
+                The structure of the data need to be (num_sample, x_t + a_t + x_t1).
+    model_dir:  path to the Deep Koopman model.
+                The model will be save to (or load from) this dir when training (or testing).
     """
     assert data_dir is not None, "Invalid data path."
     assert model_dir is not None, "Model path must be specified."
@@ -101,9 +108,12 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
         )
         print(f"[INFO] Model saved to {model_dir}")
     elif mode == "test":
-        runner.test(dataset='val', model_dir=model_dir, save_results=False, rollout_steps=1)
+        runner.test(
+            dataset="val", model_dir=model_dir, save_results=False, rollout_steps=1
+        )
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
+
 
 if __name__ == "__main__":
     run(

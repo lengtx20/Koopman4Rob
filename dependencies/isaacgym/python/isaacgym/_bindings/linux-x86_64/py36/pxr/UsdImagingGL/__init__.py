@@ -23,13 +23,14 @@
 #
 from . import _usdImagingGL
 from pxr import Tf
+
 Tf.PrepareModule(_usdImagingGL, locals())
 del _usdImagingGL, Tf
 
 try:
     from . import __DOC
+
     __DOC.Execute(locals())
     del __DOC
 except Exception:
     pass
-

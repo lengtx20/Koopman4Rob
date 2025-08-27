@@ -46,7 +46,9 @@ sim_params.use_gpu_pipeline = False
 if args.use_gpu_pipeline:
     print("WARNING: Forcing CPU pipeline.")
 
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 
 if sim is None:
     print("*** Failed to create sim")
@@ -55,7 +57,7 @@ if sim is None:
 # create viewer using the default camera properties
 viewer = gym.create_viewer(sim, gymapi.CameraProperties())
 if viewer is None:
-    raise ValueError('*** Failed to create viewer')
+    raise ValueError("*** Failed to create viewer")
 
 # add ground plane
 plane_params = gymapi.PlaneParams()
@@ -77,7 +79,7 @@ actor_handles = []
 
 # create box assets w/ varying densities (measured in kg/m^3)
 box_size = 0.2
-box_densities = [8., 32., 1024.]
+box_densities = [8.0, 32.0, 1024.0]
 for dx in range(3):
     # AssetOptions enables loading assets with different properties
     # Properties include density, angularDamping, maxAngularVelocity, linearDamping, maxLinearVelocity etc.
@@ -88,7 +90,7 @@ for dx in range(3):
 
 # create capsule asset
 asset_options = gymapi.AssetOptions()
-asset_options.density = 100.
+asset_options.density = 100.0
 asset_capsule = gym.create_capsule(sim, 0.2, 0.2, asset_options)
 
 # create ball asset with gravity disabled
@@ -103,7 +105,7 @@ asset_ball = gym.load_asset(sim, asset_root, asset_file, asset_options)
 asset_options.fix_base_link = True
 asset_box = gym.create_box(sim, 0.5, 0.1, 0.5, asset_options)
 
-print('Creating %d environments' % num_envs)
+print("Creating %d environments" % num_envs)
 for i in range(num_envs):
     # create env
     env = gym.create_env(sim, env_lower, env_upper, 1)
@@ -113,38 +115,76 @@ for i in range(num_envs):
     if i == 0:
         # add moving boxes to env
         for dx in range(3):
-            name = 'moving_box_{}'.format(dx)
-            actor_handles.append(gym.create_actor(env, box_handles[0], gymapi.Transform(p=gymapi.Vec3(dx, 0.1, 0.)), name, i, 0))
+            name = "moving_box_{}".format(dx)
+            actor_handles.append(
+                gym.create_actor(
+                    env,
+                    box_handles[0],
+                    gymapi.Transform(p=gymapi.Vec3(dx, 0.1, 0.0)),
+                    name,
+                    i,
+                    0,
+                )
+            )
             # set shape physics properties for moving boxes
             shape_props = gym.get_actor_rigid_shape_properties(env, actor_handles[-1])
             # set_actor_rigid_shape_properties enables setting shape properties for rigid body
             # Properties include friction, rolling_friction, torsion_friction, restitution etc.
-            shape_props[0].friction = 0.
-            shape_props[0].rolling_friction = 0.
-            shape_props[0].torsion_friction = 0.
+            shape_props[0].friction = 0.0
+            shape_props[0].rolling_friction = 0.0
+            shape_props[0].torsion_friction = 0.0
             gym.set_actor_rigid_shape_properties(env, actor_handles[-1], shape_props)
             # set visual property like color to moving boxes
-            gym.set_rigid_body_color(env, actor_handles[-1], 0, gymapi.MESH_VISUAL, gymapi.Vec3(0., 1., 0.))
+            gym.set_rigid_body_color(
+                env,
+                actor_handles[-1],
+                0,
+                gymapi.MESH_VISUAL,
+                gymapi.Vec3(0.0, 1.0, 0.0),
+            )
             # apply linear velocity
-            gym.set_rigid_linear_velocity(env,
-                                          gym.get_rigid_handle(env, name, gym.get_actor_rigid_body_names(env, actor_handles[0])[0]),
-                                          gymapi.Vec3(0., 0., 2.))
+            gym.set_rigid_linear_velocity(
+                env,
+                gym.get_rigid_handle(
+                    env, name, gym.get_actor_rigid_body_names(env, actor_handles[0])[0]
+                ),
+                gymapi.Vec3(0.0, 0.0, 2.0),
+            )
 
         # add target boxes to env
-        target_box_names = ['target_box_low', 'target_box_med', 'target_box_high']
-        target_box_positions = [gymapi.Vec3(0., 0.1, 2.), gymapi.Vec3(1, 0.1, 2.), gymapi.Vec3(2, 0.1, 2.)]
-        target_box_color = [gymapi.Vec3(0., 1., 0.), gymapi.Vec3(2, 0.1, 2.), gymapi.Vec3(1., 0., 0.)]
+        target_box_names = ["target_box_low", "target_box_med", "target_box_high"]
+        target_box_positions = [
+            gymapi.Vec3(0.0, 0.1, 2.0),
+            gymapi.Vec3(1, 0.1, 2.0),
+            gymapi.Vec3(2, 0.1, 2.0),
+        ]
+        target_box_color = [
+            gymapi.Vec3(0.0, 1.0, 0.0),
+            gymapi.Vec3(2, 0.1, 2.0),
+            gymapi.Vec3(1.0, 0.0, 0.0),
+        ]
         for dx in range(3):
-            actor_handles.append(gym.create_actor(env, box_handles[dx], gymapi.Transform(p=target_box_positions[dx]), target_box_names[dx], i, 0))
+            actor_handles.append(
+                gym.create_actor(
+                    env,
+                    box_handles[dx],
+                    gymapi.Transform(p=target_box_positions[dx]),
+                    target_box_names[dx],
+                    i,
+                    0,
+                )
+            )
             # set shape physics properties for target boxes
             shape_props = gym.get_actor_rigid_shape_properties(env, actor_handles[-1])
             # set coeffecient of friction
-            shape_props[0].friction = 0.
-            shape_props[0].rolling_friction = 0.
-            shape_props[0].torsion_friction = 0.
+            shape_props[0].friction = 0.0
+            shape_props[0].rolling_friction = 0.0
+            shape_props[0].torsion_friction = 0.0
             gym.set_actor_rigid_shape_properties(env, actor_handles[-1], shape_props)
             # set visual property like color to target boxes
-            gym.set_rigid_body_color(env, actor_handles[-1], 0, gymapi.MESH_VISUAL, target_box_color[dx])
+            gym.set_rigid_body_color(
+                env, actor_handles[-1], 0, gymapi.MESH_VISUAL, target_box_color[dx]
+            )
 
     # Scenario 2: Capsule with varying restitution and complince dropped on a hanging box
     if i == 1:
@@ -177,16 +217,16 @@ for i in range(num_envs):
         pose = gymapi.Transform()
         pose.r = gymapi.Quat(0, 0, 0, 1)
         num_balls = 3
-        ball_radius = .2
+        ball_radius = 0.2
         ball_spacing = 2.5 * ball_radius
         y = 1 * (num_balls - 1) * ball_spacing
         while num_balls > 0:
-            pose.p = gymapi.Vec3(num_balls * 0.001, 1. + y, 0)
+            pose.p = gymapi.Vec3(num_balls * 0.001, 1.0 + y, 0)
             # create ball actor
             ball_handle = gym.create_actor(env, asset_ball, pose, None)
-            color_vec = [1, .2, .2]
+            color_vec = [1, 0.2, 0.2]
             if num_balls != 2:
-                color_vec = [.3, .8, .3]
+                color_vec = [0.3, 0.8, 0.3]
                 # Enable gravity back on the middle ball
                 body_props = gym.get_actor_rigid_body_properties(env, ball_handle)
                 for b in range(len(body_props)):
@@ -195,7 +235,9 @@ for i in range(num_envs):
 
             # set ball color
             color = gymapi.Vec3(color_vec[0], color_vec[1], color_vec[2])
-            gym.set_rigid_body_color(env, ball_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, color)
+            gym.set_rigid_body_color(
+                env, ball_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, color
+            )
 
             y += ball_spacing
             num_balls -= 1
@@ -206,7 +248,6 @@ cam_target = gymapi.Vec3(-0.8, 0.5, 0)
 gym.viewer_camera_look_at(viewer, None, cam_pos, cam_target)
 
 while not gym.query_viewer_has_closed(viewer):
-
     # step the physics
     gym.simulate(sim)
     gym.fetch_results(sim, True)
@@ -219,7 +260,7 @@ while not gym.query_viewer_has_closed(viewer):
     # This synchronizes the physics simulation with the rendering rate.
     gym.sync_frame_time(sim)
 
-print('Done')
+print("Done")
 
 gym.destroy_viewer(viewer)
 gym.destroy_sim(sim)

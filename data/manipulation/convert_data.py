@@ -11,5 +11,3 @@ for i in range(64):
     data = np.concatenate((x, a, x1), axis=1)
     print(f"[INFO] Data shape for {i}: {data.shape}")
     np.save(f"s_v_s1/{i}.npy", data)
-
-

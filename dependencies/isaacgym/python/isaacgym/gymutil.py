@@ -23,14 +23,13 @@ from . import gymapi
 
 
 class LineGeometry(ABC):
-
     @abstractmethod
     def vertices(self):
-        """ Numpy array of Vec3 with shape (num_lines(), 2) """
+        """Numpy array of Vec3 with shape (num_lines(), 2)"""
 
     @abstractmethod
     def colors(self):
-        """ Numpy array of Vec3 with length num_lines() """
+        """Numpy array of Vec3 with length num_lines()"""
 
     def num_lines(self):
         return self.vertices().shape[0]
@@ -128,10 +127,9 @@ class WireframeBoxGeometry(LineGeometry):
 
 
 class WireframeBBoxGeometry(LineGeometry):
-
     def __init__(self, bbox, pose=None, color=None):
         if bbox.shape != (2, 3):
-            raise ValueError('Expected bbox to be a matrix of 2 by 3!')
+            raise ValueError("Expected bbox to be a matrix of 2 by 3!")
 
         if color is None:
             color = (1, 0, 0)
@@ -189,8 +187,9 @@ class WireframeBBoxGeometry(LineGeometry):
 
 
 class WireframeSphereGeometry(LineGeometry):
-
-    def __init__(self, radius=1.0, num_lats=8, num_lons=8, pose=None, color=None, color2=None):
+    def __init__(
+        self, radius=1.0, num_lats=8, num_lons=8, pose=None, color=None, color2=None
+    ):
         if color is None:
             color = (1, 0, 0)
 
@@ -275,44 +274,83 @@ def draw_line(p1, p2, color, gym, viewer, env):
 
 def parse_device_str(device_str):
     # defaults
-    device = 'cpu'
+    device = "cpu"
     device_id = 0
 
-    if device_str == 'cpu' or device_str == 'cuda':
+    if device_str == "cpu" or device_str == "cuda":
         device = device_str
         device_id = 0
     else:
-        device_args = device_str.split(':')
-        assert len(device_args) == 2 and device_args[0] == 'cuda', f'Invalid device string "{device_str}"'
+        device_args = device_str.split(":")
+        assert len(device_args) == 2 and device_args[0] == "cuda", (
+            f'Invalid device string "{device_str}"'
+        )
         device, device_id_s = device_args
         try:
             device_id = int(device_id_s)
         except ValueError:
-            raise ValueError(f'Invalid device string "{device_str}". Cannot parse "{device_id}"" as a valid device id')
+            raise ValueError(
+                f'Invalid device string "{device_str}". Cannot parse "{device_id}"" as a valid device id'
+            )
     return device, device_id
+
 
 # parses all of the common Gym example arguments and returns them to the caller
 # note that args.physics_engine stores the gymapi value for the desired physics engine
 
 
-def parse_arguments(description="Isaac Gym Example", headless=False, no_graphics=False, custom_parameters=[]):
+def parse_arguments(
+    description="Isaac Gym Example",
+    headless=False,
+    no_graphics=False,
+    custom_parameters=[],
+):
     parser = argparse.ArgumentParser(description=description)
     if headless:
-        parser.add_argument('--headless', action='store_true', help='Run headless without creating a viewer window')
+        parser.add_argument(
+            "--headless",
+            action="store_true",
+            help="Run headless without creating a viewer window",
+        )
     if no_graphics:
-        parser.add_argument('--nographics', action='store_true',
-                            help='Disable graphics context creation, no viewer window is created, and no headless rendering is available')
-    parser.add_argument('--sim_device', type=str, default="cuda:0", help='Physics Device in PyTorch-like syntax')
-    parser.add_argument('--pipeline', type=str, default="gpu", help='Tensor API pipeline (cpu/gpu)')
-    parser.add_argument('--graphics_device_id', type=int, default=0, help='Graphics Device ID')
+        parser.add_argument(
+            "--nographics",
+            action="store_true",
+            help="Disable graphics context creation, no viewer window is created, and no headless rendering is available",
+        )
+    parser.add_argument(
+        "--sim_device",
+        type=str,
+        default="cuda:0",
+        help="Physics Device in PyTorch-like syntax",
+    )
+    parser.add_argument(
+        "--pipeline", type=str, default="gpu", help="Tensor API pipeline (cpu/gpu)"
+    )
+    parser.add_argument(
+        "--graphics_device_id", type=int, default=0, help="Graphics Device ID"
+    )
 
     physics_group = parser.add_mutually_exclusive_group()
-    physics_group.add_argument('--flex', action='store_true', help='Use FleX for physics')
-    physics_group.add_argument('--physx', action='store_true', help='Use PhysX for physics')
+    physics_group.add_argument(
+        "--flex", action="store_true", help="Use FleX for physics"
+    )
+    physics_group.add_argument(
+        "--physx", action="store_true", help="Use PhysX for physics"
+    )
 
-    parser.add_argument('--num_threads', type=int, default=0, help='Number of cores used by PhysX')
-    parser.add_argument('--subscenes', type=int, default=0, help='Number of PhysX subscenes to simulate in parallel')
-    parser.add_argument('--slices', type=int, help='Number of client threads that process env slices')
+    parser.add_argument(
+        "--num_threads", type=int, default=0, help="Number of cores used by PhysX"
+    )
+    parser.add_argument(
+        "--subscenes",
+        type=int,
+        default=0,
+        help="Number of PhysX subscenes to simulate in parallel",
+    )
+    parser.add_argument(
+        "--slices", type=int, help="Number of client threads that process env slices"
+    )
 
     for argument in custom_parameters:
         if ("name" in argument) and ("type" in argument or "action" in argument):
@@ -322,15 +360,26 @@ def parse_arguments(description="Isaac Gym Example", headless=False, no_graphics
 
             if "type" in argument:
                 if "default" in argument:
-                    parser.add_argument(argument["name"], type=argument["type"], default=argument["default"], help=help_str)
+                    parser.add_argument(
+                        argument["name"],
+                        type=argument["type"],
+                        default=argument["default"],
+                        help=help_str,
+                    )
                 else:
-                    parser.add_argument(argument["name"], type=argument["type"], help=help_str)
+                    parser.add_argument(
+                        argument["name"], type=argument["type"], help=help_str
+                    )
             elif "action" in argument:
-                parser.add_argument(argument["name"], action=argument["action"], help=help_str)
+                parser.add_argument(
+                    argument["name"], action=argument["action"], help=help_str
+                )
 
         else:
             print()
-            print("ERROR: command line argument name, type/action must be defined, argument not added to parser")
+            print(
+                "ERROR: command line argument name, type/action must be defined, argument not added to parser"
+            )
             print("supported keys: name, type, default, action, help")
             print()
 
@@ -339,22 +388,24 @@ def parse_arguments(description="Isaac Gym Example", headless=False, no_graphics
     args.sim_device_type, args.compute_device_id = parse_device_str(args.sim_device)
     pipeline = args.pipeline.lower()
 
-    assert (pipeline == 'cpu' or pipeline in ('gpu', 'cuda')), f"Invalid pipeline '{args.pipeline}'. Should be either cpu or gpu."
-    args.use_gpu_pipeline = (pipeline in ('gpu', 'cuda'))
+    assert pipeline == "cpu" or pipeline in ("gpu", "cuda"), (
+        f"Invalid pipeline '{args.pipeline}'. Should be either cpu or gpu."
+    )
+    args.use_gpu_pipeline = pipeline in ("gpu", "cuda")
 
-    if args.sim_device_type != 'cuda' and args.flex:
+    if args.sim_device_type != "cuda" and args.flex:
         print("Can't use Flex with CPU. Changing sim device to 'cuda:0'")
-        args.sim_device = 'cuda:0'
+        args.sim_device = "cuda:0"
         args.sim_device_type, args.compute_device_id = parse_device_str(args.sim_device)
 
-    if (args.sim_device_type != 'cuda' and pipeline == 'gpu'):
+    if args.sim_device_type != "cuda" and pipeline == "gpu":
         print("Can't use GPU pipeline with CPU Physics. Changing pipeline to 'CPU'.")
-        args.pipeline = 'CPU'
+        args.pipeline = "CPU"
         args.use_gpu_pipeline = False
 
     # Default to PhysX
     args.physics_engine = gymapi.SIM_PHYSX
-    args.use_gpu = (args.sim_device_type == 'cuda')
+    args.use_gpu = args.sim_device_type == "cuda"
 
     if args.flex:
         args.physics_engine = gymapi.SIM_FLEX
@@ -367,6 +418,7 @@ def parse_arguments(description="Isaac Gym Example", headless=False, no_graphics
         args.slices = args.subscenes
 
     return args
+
 
 # parse sim options provided in sim_cfg to gym api sim_options
 
@@ -406,21 +458,36 @@ def parse_sim_config(sim_cfg: dict, sim_options: gymapi.SimParams):
     if "physx" in sim_cfg:
         parse_physx_config(sim_cfg["physx"], sim_options)
 
+
 # parse flex sim options
 
 # NOTE: This function is deprecated and will not be supported in future releases.
 
 
 def parse_flex_config(flex_cfg: dict, sim_options: gymapi.SimParams):
-    ints = ["solver_type", "num_outer_iterations", "num_inner_iterations", "friction_mode"]
-    floats = ["relaxation", "warm_start", "contact_regularization",
-              "geometric_stiffness", "shape_collision_distance", "shape_collision_margin",
-              "dynamic_friction", "static_friction", "particle_friction"]
+    ints = [
+        "solver_type",
+        "num_outer_iterations",
+        "num_inner_iterations",
+        "friction_mode",
+    ]
+    floats = [
+        "relaxation",
+        "warm_start",
+        "contact_regularization",
+        "geometric_stiffness",
+        "shape_collision_distance",
+        "shape_collision_margin",
+        "dynamic_friction",
+        "static_friction",
+        "particle_friction",
+    ]
     bools = ["deterministic_mode"]
 
     params = {"bool": bools, "int": ints, "float": floats}
 
     parse_float_int_bool(flex_cfg, sim_options.flex, params)
+
 
 # parse physx sim options
 
@@ -428,14 +495,30 @@ def parse_flex_config(flex_cfg: dict, sim_options: gymapi.SimParams):
 
 
 def parse_physx_config(physx_cfg: dict, sim_options: gymapi.SimParams):
-    ints = ["num_threads", "solver_type", "num_position_iterations", "num_velocity_iterations", "max_gpu_contact_pairs", "num_subscenes", "contact_collection"]
-    floats = ["contact_offset", "rest_offset", "bounce_threshold_velocity", "max_depenetration_velocity",
-              "default_buffer_size_multiplier", "friction_correlation_distance", "friction_offset_threshold"]
+    ints = [
+        "num_threads",
+        "solver_type",
+        "num_position_iterations",
+        "num_velocity_iterations",
+        "max_gpu_contact_pairs",
+        "num_subscenes",
+        "contact_collection",
+    ]
+    floats = [
+        "contact_offset",
+        "rest_offset",
+        "bounce_threshold_velocity",
+        "max_depenetration_velocity",
+        "default_buffer_size_multiplier",
+        "friction_correlation_distance",
+        "friction_offset_threshold",
+    ]
     bools = ["use_gpu", "always_use_articulations"]
 
     params = {"bool": bools, "int": ints, "float": floats}
 
     parse_float_int_bool(physx_cfg, sim_options.physx, params)
+
 
 # parses float, int, and bools listed in float_int_bool from cfg and stores them in opts
 
@@ -518,50 +601,59 @@ def get_default_setter_args(gym):
     return property_to_setter_args
 
 
-def generate_random_samples(attr_randomization_params, shape, randomization_ct,
-                            extern_sample=None):
-    rand_range = attr_randomization_params['range']
-    distribution = attr_randomization_params['distribution']
-    sched_type = attr_randomization_params['schedule'] if 'schedule' in attr_randomization_params else None
-    sched_step = attr_randomization_params['schedule_steps'] if 'schedule' in attr_randomization_params else None
-    operation = attr_randomization_params['operation']
-    if sched_type == 'linear':
+def generate_random_samples(
+    attr_randomization_params, shape, randomization_ct, extern_sample=None
+):
+    rand_range = attr_randomization_params["range"]
+    distribution = attr_randomization_params["distribution"]
+    sched_type = (
+        attr_randomization_params["schedule"]
+        if "schedule" in attr_randomization_params
+        else None
+    )
+    sched_step = (
+        attr_randomization_params["schedule_steps"]
+        if "schedule" in attr_randomization_params
+        else None
+    )
+    operation = attr_randomization_params["operation"]
+    if sched_type == "linear":
         sched_scaling = 1 / sched_step * min(randomization_ct, sched_step)
-    elif sched_type == 'constant':
+    elif sched_type == "constant":
         sched_scaling = 0 if randomization_ct < sched_step else 1
     else:
         sched_scaling = 1
 
     if extern_sample is not None:
         sample = extern_sample
-        if operation == 'additive':
+        if operation == "additive":
             sample *= sched_scaling
-        elif operation == 'scaling':
+        elif operation == "scaling":
             sample = sample * sched_scaling + 1 * (1 - sched_scaling)
     elif distribution == "gaussian":
         mu, var = rand_range
-        if operation == 'additive':
+        if operation == "additive":
             mu *= sched_scaling
             var *= sched_scaling
-        elif operation == 'scaling':
+        elif operation == "scaling":
             var = var * sched_scaling  # scale up var over time
             mu = mu * sched_scaling + 1 * (1 - sched_scaling)  # linearly interpolate
         sample = np.random.normal(mu, var, shape)
     elif distribution == "loguniform":
         lo, hi = rand_range
-        if operation == 'additive':
+        if operation == "additive":
             lo *= sched_scaling
             hi *= sched_scaling
-        elif operation == 'scaling':
+        elif operation == "scaling":
             lo = lo * sched_scaling + 1 * (1 - sched_scaling)
             hi = hi * sched_scaling + 1 * (1 - sched_scaling)
         sample = np.exp(np.random.uniform(np.log(lo), np.log(hi), shape))
     elif distribution == "uniform":
         lo, hi = rand_range
-        if operation == 'additive':
+        if operation == "additive":
             lo *= sched_scaling
             hi *= sched_scaling
-        elif operation == 'scaling':
+        elif operation == "scaling":
             lo = lo * sched_scaling + 1 * (1 - sched_scaling)
             hi = hi * sched_scaling + 1 * (1 - sched_scaling)
         sample = np.random.uniform(lo, hi, shape)
@@ -569,52 +661,70 @@ def generate_random_samples(attr_randomization_params, shape, randomization_ct,
 
 
 def get_bucketed_val(new_prop_val, attr_randomization_params):
-    if attr_randomization_params['distribution'] == 'uniform':
+    if attr_randomization_params["distribution"] == "uniform":
         # range of buckets defined by uniform distribution
-        lo, hi = attr_randomization_params['range'][0], attr_randomization_params['range'][1]
+        lo, hi = (
+            attr_randomization_params["range"][0],
+            attr_randomization_params["range"][1],
+        )
     else:
         # for gaussian, set range of buckets to be 2 stddev away from mean
-        lo = attr_randomization_params['range'][0] - 2 * np.sqrt(attr_randomization_params['range'][1])
-        hi = attr_randomization_params['range'][0] + 2 * np.sqrt(attr_randomization_params['range'][1])
-    num_buckets = attr_randomization_params['num_buckets']
+        lo = attr_randomization_params["range"][0] - 2 * np.sqrt(
+            attr_randomization_params["range"][1]
+        )
+        hi = attr_randomization_params["range"][0] + 2 * np.sqrt(
+            attr_randomization_params["range"][1]
+        )
+    num_buckets = attr_randomization_params["num_buckets"]
     buckets = [(hi - lo) * i / num_buckets + lo for i in range(num_buckets)]
     return buckets[bisect(buckets, new_prop_val) - 1]
 
 
-def apply_random_samples(prop, og_prop, attr, attr_randomization_params,
-                         randomization_ct, extern_sample=None):
+def apply_random_samples(
+    prop, og_prop, attr, attr_randomization_params, randomization_ct, extern_sample=None
+):
     if isinstance(prop, gymapi.SimParams):
-        if attr == 'gravity':
-            sample = generate_random_samples(attr_randomization_params, 3, randomization_ct)
-            if attr_randomization_params['operation'] == 'scaling':
-                prop.gravity.x = og_prop['gravity'].x * sample[0]
-                prop.gravity.y = og_prop['gravity'].y * sample[1]
-                prop.gravity.z = og_prop['gravity'].z * sample[2]
-            elif attr_randomization_params['operation'] == 'additive':
-                prop.gravity.x = og_prop['gravity'].x + sample[0]
-                prop.gravity.y = og_prop['gravity'].y + sample[1]
-                prop.gravity.z = og_prop['gravity'].z + sample[2]
+        if attr == "gravity":
+            sample = generate_random_samples(
+                attr_randomization_params, 3, randomization_ct
+            )
+            if attr_randomization_params["operation"] == "scaling":
+                prop.gravity.x = og_prop["gravity"].x * sample[0]
+                prop.gravity.y = og_prop["gravity"].y * sample[1]
+                prop.gravity.z = og_prop["gravity"].z * sample[2]
+            elif attr_randomization_params["operation"] == "additive":
+                prop.gravity.x = og_prop["gravity"].x + sample[0]
+                prop.gravity.y = og_prop["gravity"].y + sample[1]
+                prop.gravity.z = og_prop["gravity"].z + sample[2]
     elif isinstance(prop, np.ndarray):
-        sample = generate_random_samples(attr_randomization_params, prop[attr].shape,
-                                         randomization_ct, extern_sample)
-        if attr_randomization_params['operation'] == 'scaling':
+        sample = generate_random_samples(
+            attr_randomization_params, prop[attr].shape, randomization_ct, extern_sample
+        )
+        if attr_randomization_params["operation"] == "scaling":
             new_prop_val = og_prop[attr] * sample
-        elif attr_randomization_params['operation'] == 'additive':
+        elif attr_randomization_params["operation"] == "additive":
             new_prop_val = og_prop[attr] + sample
 
-        if 'num_buckets' in attr_randomization_params and attr_randomization_params['num_buckets'] > 0:
+        if (
+            "num_buckets" in attr_randomization_params
+            and attr_randomization_params["num_buckets"] > 0
+        ):
             new_prop_val = get_bucketed_val(new_prop_val, attr_randomization_params)
         prop[attr] = new_prop_val
     else:
-        sample = generate_random_samples(attr_randomization_params, 1,
-                                         randomization_ct, extern_sample)
+        sample = generate_random_samples(
+            attr_randomization_params, 1, randomization_ct, extern_sample
+        )
         cur_attr_val = og_prop[attr]
-        if attr_randomization_params['operation'] == 'scaling':
+        if attr_randomization_params["operation"] == "scaling":
             new_prop_val = cur_attr_val * sample
-        elif attr_randomization_params['operation'] == 'additive':
+        elif attr_randomization_params["operation"] == "additive":
             new_prop_val = cur_attr_val + sample
 
-        if 'num_buckets' in attr_randomization_params and attr_randomization_params['num_buckets'] > 0:
+        if (
+            "num_buckets" in attr_randomization_params
+            and attr_randomization_params["num_buckets"] > 0
+        ):
             new_prop_val = get_bucketed_val(new_prop_val, attr_randomization_params)
         setattr(prop, attr, new_prop_val)
 
@@ -624,19 +734,25 @@ def check_buckets(gym, envs, dr_params):
     for actor, actor_properties in dr_params["actor_params"].items():
         cur_num_buckets = 0
 
-        if 'rigid_shape_properties' in actor_properties.keys():
-            prop_attrs = actor_properties['rigid_shape_properties']
-            if 'restitution' in prop_attrs and 'num_buckets' in prop_attrs['restitution']:
-                cur_num_buckets = prop_attrs['restitution']['num_buckets']
-            if 'friction' in prop_attrs and 'num_buckets' in prop_attrs['friction']:
+        if "rigid_shape_properties" in actor_properties.keys():
+            prop_attrs = actor_properties["rigid_shape_properties"]
+            if (
+                "restitution" in prop_attrs
+                and "num_buckets" in prop_attrs["restitution"]
+            ):
+                cur_num_buckets = prop_attrs["restitution"]["num_buckets"]
+            if "friction" in prop_attrs and "num_buckets" in prop_attrs["friction"]:
                 if cur_num_buckets > 0:
-                    cur_num_buckets *= prop_attrs['friction']['num_buckets']
+                    cur_num_buckets *= prop_attrs["friction"]["num_buckets"]
                 else:
-                    cur_num_buckets = prop_attrs['friction']['num_buckets']
+                    cur_num_buckets = prop_attrs["friction"]["num_buckets"]
             total_num_buckets += cur_num_buckets
 
-    assert total_num_buckets <= 64000, 'Explicit material bucketing has been specified, but the provided total bucket count exceeds 64K: {} specified buckets'.format(
-        total_num_buckets)
+    assert total_num_buckets <= 64000, (
+        "Explicit material bucketing has been specified, but the provided total bucket count exceeds 64K: {} specified buckets".format(
+            total_num_buckets
+        )
+    )
 
     shape_ct = 0
 
@@ -645,10 +761,15 @@ def check_buckets(gym, envs, dr_params):
         for i in range(gym.get_actor_count(env)):
             actor_handle = gym.get_actor_handle(env, i)
             actor_name = gym.get_actor_name(env, actor_handle)
-            if actor_name in dr_params["actor_params"] and 'rigid_shape_properties' in dr_params["actor_params"][actor_name]:
+            if (
+                actor_name in dr_params["actor_params"]
+                and "rigid_shape_properties" in dr_params["actor_params"][actor_name]
+            ):
                 shape_ct += gym.get_actor_rigid_shape_count(env, actor_handle)
 
-    assert shape_ct <= 64000 or total_num_buckets > 0, 'Explicit material bucketing is not used but the total number of shapes exceeds material limit. Please specify bucketing to limit material count.'
+    assert shape_ct <= 64000 or total_num_buckets > 0, (
+        "Explicit material bucketing is not used but the total number of shapes exceeds material limit. Please specify bucketing to limit material count."
+    )
 
 
 def _indent_xml(elem, level=0):

@@ -25,8 +25,7 @@ def print_asset_info(asset, name):
     num_bodies = gym.get_asset_rigid_body_count(asset)
     num_joints = gym.get_asset_joint_count(asset)
     num_dofs = gym.get_asset_dof_count(asset)
-    print("Got %d bodies, %d joints, and %d DOFs" %
-          (num_bodies, num_joints, num_dofs))
+    print("Got %d bodies, %d joints, and %d DOFs" % (num_bodies, num_joints, num_dofs))
 
     # Iterate through bodies
     print("Bodies:")
@@ -52,7 +51,6 @@ def print_asset_info(asset, name):
 
 
 def print_actor_info(gym, env, actor_handle):
-
     name = gym.get_actor_name(env, actor_handle)
 
     body_names = gym.get_actor_rigid_body_names(env, actor_handle)
@@ -81,19 +79,18 @@ def print_actor_info(gym, env, actor_handle):
     print()
 
     # Get body state information
-    body_states = gym.get_actor_rigid_body_states(
-        env, actor_handle, gymapi.STATE_ALL)
+    body_states = gym.get_actor_rigid_body_states(env, actor_handle, gymapi.STATE_ALL)
 
     # Print some state slices
     print("Poses from Body State:")
-    print(body_states['pose'])          # print just the poses
+    print(body_states["pose"])  # print just the poses
 
     print("\nVelocities from Body State:")
-    print(body_states['vel'])          # print just the velocities
+    print(body_states["vel"])  # print just the velocities
     print()
 
     # iterate through bodies and print name and position
-    body_positions = body_states['pose']['p']
+    body_positions = body_states["pose"]["p"]
     for i in range(len(body_names)):
         print("Body '%s' has position" % body_names[i], body_positions[i])
 
@@ -108,7 +105,7 @@ def print_actor_info(gym, env, actor_handle):
     print()
 
     # iterate through DOFs and print name and position
-    dof_positions = dof_states['pos']
+    dof_positions = dof_states["pos"]
     for i in range(len(dof_names)):
         print("DOF '%s' has position" % dof_names[i], dof_positions[i])
 
@@ -126,7 +123,9 @@ sim_params.use_gpu_pipeline = False
 if args.use_gpu_pipeline:
     print("WARNING: Forcing CPU pipeline.")
 
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 
 if sim is None:
     print("*** Failed to create sim")
@@ -140,9 +139,11 @@ print("Working directory: %s" % os.getcwd())
 asset_root = "../../assets"
 
 # List of assets that will be loaded, both URDF and MJCF files are supported
-asset_files = ["urdf/cartpole.urdf",
-               "urdf/franka_description/robots/franka_panda.urdf",
-               "mjcf/nv_ant.xml"]
+asset_files = [
+    "urdf/cartpole.urdf",
+    "urdf/franka_description/robots/franka_panda.urdf",
+    "mjcf/nv_ant.xml",
+]
 asset_names = ["cartpole", "franka", "ant"]
 loaded_assets = []
 

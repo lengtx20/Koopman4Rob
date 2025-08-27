@@ -17,15 +17,14 @@ from isaacgym import gymapi
 from isaacgym import gymutil
 from isaacgym import gymtorch
 
-import torch
-
 
 gym = gymapi.acquire_gym()
 
 # Parse arguments
-args = gymutil.parse_arguments(description="PyTorch tensor interop example",
-                               custom_parameters=[
-                                   {"name": "--headless", "action": "store_true", "help": ""}])
+args = gymutil.parse_arguments(
+    description="PyTorch tensor interop example",
+    custom_parameters=[{"name": "--headless", "action": "store_true", "help": ""}],
+)
 
 # configure sim
 sim_params = gymapi.SimParams()
@@ -48,7 +47,9 @@ sim_params.use_gpu_pipeline = True
 if not args.use_gpu_pipeline:
     print("Warning: Forcing GPU pipeline.")
 
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 if sim is None:
     print("*** Failed to create sim")
     quit()
@@ -100,7 +101,13 @@ for i in range(num_envs):
 
     # set ball color
     c = 0.5 + 0.5 * np.random.random(3)
-    gym.set_rigid_body_color(env, actor_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, gymapi.Vec3(c[0], c[1], c[2]))
+    gym.set_rigid_body_color(
+        env,
+        actor_handle,
+        0,
+        gymapi.MESH_VISUAL_AND_COLLISION,
+        gymapi.Vec3(c[0], c[1], c[2]),
+    )
 
     # add camera
     cam_props = gymapi.CameraProperties()
@@ -112,7 +119,9 @@ for i in range(num_envs):
     cams.append(cam_handle)
 
     # obtain camera tensor
-    cam_tensor = gym.get_camera_image_gpu_tensor(sim, env, cam_handle, gymapi.IMAGE_COLOR)
+    cam_tensor = gym.get_camera_image_gpu_tensor(
+        sim, env, cam_handle, gymapi.IMAGE_COLOR
+    )
     print("Got camera tensor with shape", cam_tensor.shape)
 
     # wrap camera tensor in a pytorch tensor
@@ -158,7 +167,6 @@ next_fps_report = 2.0
 t1 = 0
 
 while viewer is None or not gym.query_viewer_has_closed(viewer):
-
     frame_no = gym.get_frame_count(sim)
 
     gym.simulate(sim)
@@ -175,7 +183,6 @@ while viewer is None or not gym.query_viewer_has_closed(viewer):
 
     # write out state and sensors periodically during the first little while
     if frame_no < 60 and frame_no % 10 == 0:
-
         print("========= Frame %d ==========" % frame_no)
 
         # print the state tensors

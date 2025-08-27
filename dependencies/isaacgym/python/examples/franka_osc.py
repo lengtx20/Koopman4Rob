@@ -30,11 +30,31 @@ def orientation_error(desired, current):
 
 
 # Parse arguments
-args = gymutil.parse_arguments(description="Franka Tensor OSC Example",
-                               custom_parameters=[
-                                   {"name": "--num_envs", "type": int, "default": 256, "help": "Number of environments to create"},
-                                   {"name": "--pos_control", "type": gymutil.parse_bool, "const": True, "default": True, "help": "Trace circular path in XZ plane"},
-                                   {"name": "--orn_control", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Send random orientation commands"}])
+args = gymutil.parse_arguments(
+    description="Franka Tensor OSC Example",
+    custom_parameters=[
+        {
+            "name": "--num_envs",
+            "type": int,
+            "default": 256,
+            "help": "Number of environments to create",
+        },
+        {
+            "name": "--pos_control",
+            "type": gymutil.parse_bool,
+            "const": True,
+            "default": True,
+            "help": "Trace circular path in XZ plane",
+        },
+        {
+            "name": "--orn_control",
+            "type": gymutil.parse_bool,
+            "const": True,
+            "default": False,
+            "help": "Send random orientation commands",
+        },
+    ],
+)
 
 # Initialize gym
 gym = gymapi.acquire_gym()
@@ -56,7 +76,9 @@ else:
 
 sim_params.use_gpu_pipeline = args.use_gpu_pipeline
 
-sim = gym.create_sim(args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params)
+sim = gym.create_sim(
+    args.compute_device_id, args.graphics_device_id, args.physics_engine, sim_params
+)
 
 if sim is None:
     raise Exception("Failed to create sim")
@@ -82,13 +104,12 @@ asset_options.armature = 0.01
 asset_options.disable_gravity = True
 
 print("Loading asset '%s' from '%s'" % (franka_asset_file, asset_root))
-franka_asset = gym.load_asset(
-    sim, asset_root, franka_asset_file, asset_options)
+franka_asset = gym.load_asset(sim, asset_root, franka_asset_file, asset_options)
 
 # get joint limits and ranges for Franka
 franka_dof_props = gym.get_asset_dof_properties(franka_asset)
-franka_lower_limits = franka_dof_props['lower']
-franka_upper_limits = franka_dof_props['upper']
+franka_lower_limits = franka_dof_props["lower"]
+franka_upper_limits = franka_dof_props["upper"]
 franka_ranges = franka_upper_limits - franka_lower_limits
 franka_mids = 0.5 * (franka_upper_limits + franka_lower_limits)
 franka_num_dofs = len(franka_dof_props)
@@ -147,7 +168,9 @@ for i in range(num_envs):
     init_orn_list.append([hand_pose.r.x, hand_pose.r.y, hand_pose.r.z, hand_pose.r.w])
 
     # Get global index of hand in rigid body state tensor
-    hand_idx = gym.find_actor_rigid_body_index(env, franka_handle, "panda_hand", gymapi.DOMAIN_SIM)
+    hand_idx = gym.find_actor_rigid_body_index(
+        env, franka_handle, "panda_hand", gymapi.DOMAIN_SIM
+    )
     hand_idxs.append(hand_idx)
 
 # Point camera at middle env
@@ -165,8 +188,8 @@ init_pos = torch.Tensor(init_pos_list).view(num_envs, 3)
 init_orn = torch.Tensor(init_orn_list).view(num_envs, 4)
 
 if args.use_gpu_pipeline:
-    init_pos = init_pos.to('cuda:0')
-    init_orn = init_orn.to('cuda:0')
+    init_pos = init_pos.to("cuda:0")
+    init_orn = init_orn.to("cuda:0")
 
 # desired hand positions and orientations
 pos_des = init_pos.clone()
@@ -201,7 +224,6 @@ dof_pos = dof_states[:, 0].view(num_envs, 9, 1)
 
 itr = 0
 while not gym.query_viewer_has_closed(viewer):
-
     # Randomize desired hand orientations
     if itr % 250 == 0 and args.orn_control:
         orn_des = torch.rand_like(orn_des)
@@ -238,7 +260,10 @@ while not gym.query_viewer_has_closed(viewer):
 
     dpose = torch.cat([pos_err, orn_err], -1)
 
-    u = torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1) - kv * mm @ dof_vel
+    u = (
+        torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1)
+        - kv * mm @ dof_vel
+    )
 
     # Set tensor action
     gym.set_dof_actuation_force_tensor(sim, gymtorch.unwrap_tensor(u))

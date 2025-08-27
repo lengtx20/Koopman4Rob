@@ -23,4 +23,4 @@
 #
 from pxr import Tf
 
-Tf.ScriptModuleLoader()._LoadModulesForLibrary('Other')
+Tf.ScriptModuleLoader()._LoadModulesForLibrary("Other")

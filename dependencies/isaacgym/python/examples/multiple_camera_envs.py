@@ -13,6 +13,7 @@ Multiple cameras with multiple environments example
 Demonstrates ability to instantiate multiple cameras within multiple
 environments in a scene
 """
+
 import os
 
 import numpy as np
@@ -22,10 +23,17 @@ from isaacgym import gymutil
 gym = gymapi.acquire_gym()
 
 # parse arguments
-args = gymutil.parse_arguments(description="Multiple Cameras Example",
-                               custom_parameters=[
-                                   {"name": "--save_images", "action": "store_true", "help": "Write RGB and Depth Images To Disk"},
-                                   {"name": "--up_axis_z", "action": "store_true", "help": ""}])
+args = gymutil.parse_arguments(
+    description="Multiple Cameras Example",
+    custom_parameters=[
+        {
+            "name": "--save_images",
+            "action": "store_true",
+            "help": "Write RGB and Depth Images To Disk",
+        },
+        {"name": "--up_axis_z", "action": "store_true", "help": ""},
+    ],
+)
 
 sim_params = gymapi.SimParams()
 plane_params = gymapi.PlaneParams()
@@ -65,24 +73,32 @@ camera_props.height = 1080
 ch_map = {idx: {} for idx in env_idxs}
 
 pos = gymapi.Vec3(1.38, 1.0, 0)
-name = 'cam0'
+name = "cam0"
 
 for env_idx in env_idxs:
     env_ptr = env_ptrs[env_idx]
     ch = gym.create_camera_sensor(env_ptr, camera_props)
     ch_map[env_idx][name] = ch
     gym.set_camera_transform(ch, env_ptr, gymapi.Transform(p=pos, r=gymapi.Quat()))
-    print("Added {} with handle {} in env {} | View matrix: {}".format(name, ch, env_idx, gym.get_camera_view_matrix(sim, env_ptr, ch)))
+    print(
+        "Added {} with handle {} in env {} | View matrix: {}".format(
+            name, ch, env_idx, gym.get_camera_view_matrix(sim, env_ptr, ch)
+        )
+    )
 
-pos = gymapi.Vec3(0.5, 9.0, .8)
-name = 'cam1'
+pos = gymapi.Vec3(0.5, 9.0, 0.8)
+name = "cam1"
 
 for env_idx in env_idxs:
     env_ptr = env_ptrs[env_idx]
     ch = gym.create_camera_sensor(env_ptr, camera_props)
     ch_map[env_idx][name] = ch
     gym.set_camera_transform(ch, env_ptr, gymapi.Transform(p=pos, r=gymapi.Quat()))
-    print("Added {} with handle {} in env {} | View matrix: {}".format(name, ch, env_idx, gym.get_camera_view_matrix(sim, env_ptr, ch)))
+    print(
+        "Added {} with handle {} in env {} | View matrix: {}".format(
+            name, ch, env_idx, gym.get_camera_view_matrix(sim, env_ptr, ch)
+        )
+    )
 
 if args.save_images and not os.path.exists("multiple_camera_images"):
     os.mkdir("multiple_camera_images")
@@ -92,22 +108,34 @@ gym.render_all_camera_sensors(sim)
 for env_idx in env_idxs:
     env_ptr = env_ptrs[env_idx]
 
-    name = 'cam0'
+    name = "cam0"
     ch = ch_map[env_idx][name]
     rgb_filename = "multiple_camera_images/rgb_env%d_cam0.png" % (env_idx)
     if args.save_images:
-        gym.write_camera_image_to_file(sim, env_ptr, ch, gymapi.IMAGE_COLOR, rgb_filename)
+        gym.write_camera_image_to_file(
+            sim, env_ptr, ch, gymapi.IMAGE_COLOR, rgb_filename
+        )
 
-    print("View matrix of {} with handle {} in env {}: {}".format(name, ch, env_idx, gym.get_camera_view_matrix(sim, env_ptr, ch)))
+    print(
+        "View matrix of {} with handle {} in env {}: {}".format(
+            name, ch, env_idx, gym.get_camera_view_matrix(sim, env_ptr, ch)
+        )
+    )
 
-    name = 'cam1'
+    name = "cam1"
     ch = ch_map[env_idx][name]
     rgb_filename = "multiple_camera_images/rgb_env%d_cam1.png" % (env_idx)
 
     if args.save_images:
-        gym.write_camera_image_to_file(sim, env_ptr, ch, gymapi.IMAGE_COLOR, rgb_filename)
+        gym.write_camera_image_to_file(
+            sim, env_ptr, ch, gymapi.IMAGE_COLOR, rgb_filename
+        )
 
-    print("View matrix of {} with handle {} in env {}: {}".format(name, ch, env_idx, gym.get_camera_view_matrix(sim, env_ptr, ch)))
+    print(
+        "View matrix of {} with handle {} in env {}: {}".format(
+            name, ch, env_idx, gym.get_camera_view_matrix(sim, env_ptr, ch)
+        )
+    )
 
 gym.simulate(sim)
 gym.fetch_results(sim, True)

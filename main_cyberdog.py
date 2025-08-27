@@ -1,4 +1,4 @@
-""" Train data from CyberDog dataset using Deep Koopman model """
+"""Train data from CyberDog dataset using Deep Koopman model"""
 
 import numpy as np
 import torch
@@ -6,23 +6,22 @@ import torch.optim as optim
 from torch.nn import MSELoss
 from models.deep_koopman import Deep_Koopman
 from runner.koopman_runner import KoopmanRunner
-from data.load_pickle_data import load_pickle_data
-from data.cyberdog.data_processor import CyberDogDataProcessor
 import os
 
-def load_data(mode, data_dir, ratio: float=0.8):
+
+def load_data(mode, data_dir, ratio: float = 0.8):
     traj = []
     min_length = 1258
-    for i in range(1, 2):           # 4
-        for j in range(1, 4):       # 4
-            for k in range(1, 6):   # 6
-                file_name = f'cyberdog_{i}{j}{k}.npy'
+    for i in range(1, 2):  # 4
+        for j in range(1, 4):  # 4
+            for k in range(1, 6):  # 6
+                file_name = f"cyberdog_{i}{j}{k}.npy"
                 file_path = os.path.join(data_dir, file_name)
                 data = np.load(file_path)
                 traj.append(data)
     data = np.concatenate(traj, axis=0)
     print(f"[INFO] Data shape: {data.shape}")
-    
+
     length = data.shape[0]
     if mode == "test":
         train_data = data[1000:1010]
@@ -35,13 +34,14 @@ def load_data(mode, data_dir, ratio: float=0.8):
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
     return train_data, val_data
 
+
 def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
     """
-        mode:       select between train / test
-        data_path:  path to the npy file.
-                    The structure of the data need to be (num_sample, x_t + a_t + x_t1).
-        model_dir:  path to the Deep Koopman model.
-                    The model will be save to (or load from) this dir when training (or testing).
+    mode:       select between train / test
+    data_path:  path to the npy file.
+                The structure of the data need to be (num_sample, x_t + a_t + x_t1).
+    model_dir:  path to the Deep Koopman model.
+                The model will be save to (or load from) this dir when training (or testing).
     """
     assert data_dir is not None, "Invalid data path."
     assert model_dir is not None, "Model path must be specified."
@@ -93,6 +93,7 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
         runner.test(model_dir=model_dir)
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
+
 
 if __name__ == "__main__":
     run(

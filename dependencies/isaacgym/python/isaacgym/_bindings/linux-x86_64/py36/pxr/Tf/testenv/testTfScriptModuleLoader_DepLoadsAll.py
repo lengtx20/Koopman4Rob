@@ -23,5 +23,4 @@
 #
 from pxr import Tf
 
-Tf.ScriptModuleLoader()._LoadModulesForLibrary('DepLoadsAll')
-
+Tf.ScriptModuleLoader()._LoadModulesForLibrary("DepLoadsAll")
