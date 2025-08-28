@@ -1,4 +1,4 @@
-"""Train data from Manipulation with Vision dataset using Deep Koopman model"""
+"""Train data from resnet with Vision dataset using Deep Koopman model"""
 
 import numpy as np
 import torch
@@ -8,36 +8,27 @@ from models.deep_koopman import Deep_Koopman
 from runner.koopman_runner import KoopmanRunner
 import os
 
-
 def load_data(mode, data_dir, ratio: float = 0.8):
     traj = []
-    # min_length = 200
     for i in range(64):
         file_name = f"{i}.npy"
         file_path = os.path.join(data_dir, file_name)
         data = np.load(file_path)
         traj.append(data)
-    
-    length = data.shape[0]
+
     if mode == "test":
-        train_traj = traj[: int(len(traj) * ratio)]
-        val_traj = traj[int(len(traj) * ratio) :]
-        train_traj = train_traj[:2]
-        train_data = np.concatenate(train_traj, axis=0)
-        val_data = np.concatenate(val_traj, axis=0)
-        print(f"[INFO] Train data shape: {train_data.shape}")
-        print(f"[INFO] Val data shape: {val_data.shape}")
+        length = int(len(traj) * ratio)
+        train_data = np.concatenate(traj[:64-length], axis=0)
+        val_data = np.concatenate(traj[length:], axis=0)
+        print(f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}")
     elif mode == "train":
-        train_traj = traj[: int(len(traj) * ratio)]
-        val_traj = traj[int(len(traj) * ratio) :]
-        train_data = np.concatenate(train_traj, axis=0)
-        val_data = np.concatenate(val_traj, axis=0)
-        print(f"[INFO] Train data shape: {train_data.shape}")
-        print(f"[INFO] Val data shape: {val_data.shape}")
+        length = int(len(traj) * ratio)
+        train_data = np.concatenate(traj[:length], axis=0)
+        val_data = np.concatenate(traj[length:], axis=0)
+        print(f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}")
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
     return train_data, val_data
-
 
 def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
     """
@@ -52,8 +43,8 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print(f"[INFO] Loading Data from {data_dir}")
-    train_data, val_data = load_data(mode, data_dir, ratio=0.8)
-
+    train_data, val_data = load_data(mode, data_dir)
+    
     # ===== init model and alg ===== #
     loss_fn = MSELoss()
     model = Deep_Koopman(
@@ -68,6 +59,7 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
     ewc = None
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     runner = KoopmanRunner(
+        mode=mode,
         model=model,
         ewc_model=ewc,
         state_dim=7,
@@ -91,13 +83,13 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
                 new_dir = model_dir + f"{idx}"
                 if not os.path.exists(new_dir):
                     model_dir = new_dir
-                    # print(f"[INFO] Model dir exists. Change to {model_dir}")
+                    print(f"[INFO] Model dir exists. Change to {model_dir}")
                     break
                 idx += 1
         os.makedirs(os.path.dirname(model_dir) or ".", exist_ok=True)
 
         runner.train(
-            max_epochs=100,
+            max_epochs=150,
             save_model=True,
             model_dir=model_dir,
             task_id=1,
@@ -109,17 +101,16 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
         print(f"[INFO] Model saved to {model_dir}")
     elif mode == "test":
         runner.test(
-            dataset="val", model_dir=model_dir, save_results=False, rollout_steps=1
+            dataset="train", model_dir=model_dir, save_results=False, rollout_steps=1
         )
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
 
-
 if __name__ == "__main__":
     run(
         mode="test",
-        data_dir="data/manipulation/s_v_s1",
-        model_dir="logs/manipulation_100",
+        data_dir="data/resnet/s_v_s1",
+        model_dir="logs/resnet_150",
         # fisher_path="/home/ltx/Koopman4Rob/logs/test/ewc_task1.pt",
         fisher_path=None,
     )

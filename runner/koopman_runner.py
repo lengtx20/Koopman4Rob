@@ -25,6 +25,7 @@ class KoopmanDataset(Dataset):
 class KoopmanRunner:
     def __init__(
         self,
+        mode,
         model,
         ewc_model,
         state_dim,
@@ -46,6 +47,7 @@ class KoopmanRunner:
                     This is to assure the consistency of the model.
         """
         # params
+        self.mode = mode
         self.model = model.to(device)
         self.ewc_model = ewc_model
         self.state_dim = state_dim
@@ -67,7 +69,7 @@ class KoopmanRunner:
         self.train_loader = DataLoader(
             KoopmanDataset(train_data),
             batch_size=batch_size,
-            shuffle=True,
+            shuffle=(True and mode=="train"),
             num_workers=num_workers,
         )
         self.val_loader = DataLoader(
