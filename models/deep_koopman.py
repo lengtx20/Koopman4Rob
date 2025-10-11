@@ -42,9 +42,12 @@ class Encoder(nn.Module):
 
         layers = []
         self.sizes = [self.state_dim] + self.hidden_sizes + [self.output_size]
-        for in_dim, out_dim in zip(self.sizes[:-1], self.sizes[1:]):
-            layers.append(nn.Linear(in_dim, out_dim, bias=(activation != "linear")))
-            if out_dim != self.output_size and activation != "linear":
+        # last linear layer index
+        last_i = len(self.sizes) - 2
+        not_linear = activation != "linear"
+        for i, (in_dim, out_dim) in enumerate(zip(self.sizes[:-1], self.sizes[1:])):
+            layers.append(nn.Linear(in_dim, out_dim, bias=(not_linear or i == last_i)))
+            if not_linear and i != last_i:
                 layers.append(get_activation(activation))
         self.layers = nn.Sequential(*layers)
 
@@ -86,9 +89,13 @@ class Decoder(nn.Module):
         if not self.iden_decoder:
             layers = []
             self.sizes = [self.lifted_dim] + hidden_sizes + [state_dim]
-            for in_dim, out_dim in zip(self.sizes[:-1], self.sizes[1:]):
-                layers.append(nn.Linear(in_dim, out_dim, bias=(activation != "linear")))
-                if out_dim != state_dim and activation != "linear":
+            last_i = len(self.sizes) - 2
+            not_linear = activation != "linear"
+            for i, (in_dim, out_dim) in enumerate(zip(self.sizes[:-1], self.sizes[1:])):
+                layers.append(
+                    nn.Linear(in_dim, out_dim, bias=(not_linear or i == last_i))
+                )
+                if not_linear and i != last_i:
                     layers.append(get_activation(activation))
             self.layers = nn.Sequential(*layers)
 
@@ -209,8 +216,7 @@ class Deep_Koopman(nn.Module):
 
     def linear_dynamics(self, z: torch.Tensor, u: torch.Tensor):
         """z -> z_next = A * z + B * u"""
-        # return self.A @ z.T + self.B @ u.T
-        return z @ self.A.T + u @ self.B.T
+        return (self.A @ z.T + self.B @ u.T).T
 
     def forward(
         self, x: torch.Tensor, u: torch.Tensor, get_action: bool = False
