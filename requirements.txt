@@ -6,4 +6,5 @@ tqdm==4.67.0
 tensorboard
 # for mcap data loading
 mcap-data-loader
-torchdata
+torchdata>=0.10.0
+transformers
