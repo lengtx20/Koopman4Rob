@@ -40,6 +40,8 @@ class KoopmanRunner:
         num_workers=0,
         ewc_lambda=0.0,
         tb_log_dir="logs/tensorboard",
+        data_root="",
+        model_path="",
     ):
         """
         model:      Deep Koopman model
@@ -66,18 +68,25 @@ class KoopmanRunner:
         self.vales = []
 
         # dataset
-        self.train_loader = DataLoader(
-            KoopmanDataset(train_data),
-            batch_size=batch_size,
-            shuffle=(True and mode=="train"),
-            num_workers=num_workers,
-        )
-        self.val_loader = DataLoader(
-            KoopmanDataset(val_data),
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=num_workers,
-        )
+        if data_root:
+            from data.mcap_data_utils import create_train_val_dataloader
+
+            self.train_loader, self.val_loader = create_train_val_dataloader(
+                model_path, data_root, batch_size, num_workers
+            )
+        else:
+            self.train_loader = DataLoader(
+                KoopmanDataset(train_data),
+                batch_size=batch_size,
+                shuffle=(True and mode == "train"),
+                num_workers=num_workers,
+            )
+            self.val_loader = DataLoader(
+                KoopmanDataset(val_data),
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=num_workers,
+            )
 
         # normalization (TODO)
         if self.normalize:
@@ -296,8 +305,10 @@ class KoopmanRunner:
             # ----- training step -----
             total_loss = 0
             self.model.train()
+            sample_num = 0
             for batch in self.train_loader:
-                batch = batch.to(self.device)
+                if isinstance(batch, torch.Tensor):
+                    batch = batch.to(self.device)
                 x_t = batch[:, : self.state_dim]
                 a_t = batch[:, self.state_dim : self.state_dim + self.action_dim]
                 x_t1 = batch[:, -self.state_dim :]
@@ -313,8 +324,9 @@ class KoopmanRunner:
                 loss.backward()
                 self.optimizer.step()
                 total_loss += loss.item() * batch.size(0)
+                sample_num += batch.size(0)
 
-            train_loss = total_loss / self.train_data.shape[0]
+            train_loss = total_loss / sample_num
 
             # ----- validation step -----
             if self.val_data is None:
@@ -322,6 +334,7 @@ class KoopmanRunner:
             else:
                 self.model.eval()
                 val_loss = 0
+                sample_num = 0
                 with torch.no_grad():
                     for batch in self.val_loader:
                         batch = batch.to(self.device)
@@ -334,8 +347,9 @@ class KoopmanRunner:
                         pred_x_t1 = self.model(x_t, a_t, False)
                         loss = self.loss_fn(pred_x_t1, x_t1)
                         val_loss += loss.item() * batch.size(0)
+                        sample_num += batch.size(0)
 
-                val_loss /= self.val_data.shape[0]
+                val_loss /= sample_num
 
             self.losses.append(train_loss)
             self.vales.append(val_loss)

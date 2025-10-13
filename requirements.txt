@@ -3,3 +3,7 @@ numpy==1.24.4
 scipy
 torch==2.1.0
 tqdm==4.67.0
+tensorboard
+# for mcap data loading
+mcap-data-loader
+torchdata
