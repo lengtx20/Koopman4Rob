@@ -115,10 +115,14 @@ class Blip2ImageFeatureExtractor:
             self.device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
         else:
             self.device = device
+        self.dtype = torch.float16
+        self.model_path = model_path
+
+    def load_model(self):
         self.get_logger().info(f"Loading BLIP2 model on {self.device}...")
         model: Blip2ForImageTextRetrievalModified = (
             Blip2ForImageTextRetrievalModified.from_pretrained(
-                model_path, dtype=torch.float16
+                self.model_path, dtype=self.dtype
             )
             .to(self.device)
             .eval()

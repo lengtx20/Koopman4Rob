@@ -81,11 +81,15 @@ class KoopmanRunner:
                 shuffle=(True and mode == "train"),
                 num_workers=num_workers,
             )
-            self.val_loader = DataLoader(
-                KoopmanDataset(val_data),
-                batch_size=batch_size,
-                shuffle=False,
-                num_workers=num_workers,
+            self.val_loader = (
+                DataLoader(
+                    KoopmanDataset(val_data),
+                    batch_size=batch_size,
+                    shuffle=False,
+                    num_workers=num_workers,
+                )
+                if val_data is not None
+                else None
             )
 
         # normalization (TODO)
@@ -329,7 +333,7 @@ class KoopmanRunner:
             train_loss = total_loss / sample_num
 
             # ----- validation step -----
-            if self.val_data is None:
+            if self.val_loader is None:
                 val_loss = None
             else:
                 self.model.eval()

@@ -18,6 +18,7 @@ def create_mcap_dataloader(
     model_path: str, datasets: list, batch_size: int, num_workers: int = 0, device=None
 ):
     extractor = Blip2ImageFeatureExtractor(model_path, device)
+    extractor.load_model()
 
     source_nodes = {}
     weights = {}
@@ -42,6 +43,7 @@ def create_mcap_dataloader(
         batched_samples: List[Tuple[SampleType, SampleType]],
     ) -> torch.Tensor:
         batched_list = []
+        mock_features = torch.zeros(256, dtype=extractor.dtype, device=extractor.device)
         for sample in batched_samples:
             tensor_samples = []
             for s in sample:
@@ -50,36 +52,9 @@ def create_mcap_dataloader(
                     if not value.flags.writeable:
                         value = value.copy()
                     tensor_sample[key] = torch.from_numpy(value).to(
-                        device=extractor.model.device, dtype=extractor.model.dtype
+                        device=extractor.device, dtype=extractor.dtype
                     )
                 tensor_samples.append(tensor_sample)
-            # sample_dict = {
-            #     "cur_states": (
-            #         torch.concatenate(
-            #             [tensor_samples[0][arm_key], tensor_samples[0][eef_key]]
-            #         ),
-            #     ),
-            #     "next_states": (
-            #         torch.concatenate(
-            #             [tensor_samples[1][arm_key], tensor_samples[1][eef_key]]
-            #         ),
-            #     ),
-            #     "images_features": (
-            #         extractor.process_image(tensor_samples[0][cam_key], prompt),
-            #     ),
-            # }
-            # print(
-            #     [
-            #         # state dim
-            #         tensor_samples[0][arm_key].shape,
-            #         tensor_samples[0][eef_key].shape,
-            #         # action dim
-            #         extractor.process_image(tensor_samples[0][cam_key], prompt).shape,
-            #         # next state dim
-            #         tensor_samples[1][arm_key].shape,
-            #         tensor_samples[1][eef_key].shape,
-            #     ]
-            # )
             sample_array = torch.concatenate(
                 [
                     # state dim
@@ -89,11 +64,12 @@ def create_mcap_dataloader(
                     extractor.process_image(tensor_samples[0][cam_key], prompt).squeeze(
                         0
                     ),
+                    # mock_features,
                     # next state dim
                     tensor_samples[1][arm_key],
                     tensor_samples[1][eef_key],
                 ]
-            )
+            ).to(dtype=torch.float32)
             batched_list.append(sample_array)
         return torch.stack(batched_list)
 
