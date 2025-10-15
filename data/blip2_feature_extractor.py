@@ -132,7 +132,7 @@ class Blip2ImageFeatureExtractor:
         self.model = model
         self.get_logger().info("Loading processor...")
         processor: AutoProcessor = AutoProcessor.from_pretrained(
-            model_path, use_fast=True
+            self.model_path, use_fast=True
         )
         self.processor = processor
         self.get_logger().info("Initialized.")
