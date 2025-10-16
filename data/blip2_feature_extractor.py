@@ -171,13 +171,74 @@ class Blip2ImageFeatureExtractor:
 
 
 if __name__ == "__main__":
+    from mcap_data_loader.datasets.mcap_dataset import (
+        McapFlatBuffersEpisodeDataset,
+        McapFlatBuffersEpisodeDatasetConfig,
+    )
+
+    # TODO: maybe there can be a reversed dataset that writes to MCAP?
+    from mcap_data_loader.serialization.flb import (
+        McapFlatBuffersWriter,
+        FlatBuffersSchemas,
+    )
+    from time import time_ns
+    from pathlib import Path
+    from tqdm import tqdm
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--input-directory", "-id", type=str, help="Directory containing the dataset"
+    )
+    parser.add_argument(
+        "--output-directory",
+        "-od",
+        type=str,
+        default="",
+        help="Directory to save the output",
+    )
+    parser.add_argument("--model-path", "-mp", type=str, help="Path to the BLIP2 model")
+    args = parser.parse_args()
+
     logging.basicConfig(level=logging.INFO)
 
-    model_path = "/home/ghz/blip2-itm-vit-g"
-    image = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-
+    model_path = args.model_path
     extractor = Blip2ImageFeatureExtractor(model_path=model_path)
-    features = extractor.process_image(
-        image, "Open the door with the vertical black handle"
+    extractor.load_model()
+
+    input_dir = Path(args.input_directory)
+    keys = [
+        "/env_camera/color/image_raw",
+    ]
+    dataset = McapFlatBuffersEpisodeDataset(
+        McapFlatBuffersEpisodeDatasetConfig(
+            data_root=input_dir,
+            keys=keys,
+        )
     )
-    print(features.shape)  # [1, 768]
+    dataset.load()
+    output_dir = args.output_directory
+    if output_dir == "":
+        output_dir = input_dir.parent / f"{input_dir.name}_blip2_features"
+    else:
+        output_dir = Path(output_dir)
+    for index, episode in enumerate(dataset):
+        print(
+            f"Processing episode {index + 1}/{len(dataset)}: {episode.config.data_root}"
+        )
+        writer = McapFlatBuffersWriter()
+        writer.create_writer(output_dir / episode.config.data_root.name, overwrite=True)
+        for key in keys:
+            writer.register_channel(f"{key}/features", FlatBuffersSchemas.FLOAT_ARRAY)
+        for sample in tqdm(episode, desc="Processing samples", total=len(episode)):
+            # pprint(sample)
+            for key, value in sample.items():
+                features = extractor.process_image(
+                    value, "Open the door with the vertical black handle"
+                ).squeeze(0)
+                # print(features.shape)
+                writer.add_array(
+                    f"{key}/features", features.tolist(), time_ns(), time_ns()
+                )
+        writer.unset_writer(finish=True)
+    print("Done")
