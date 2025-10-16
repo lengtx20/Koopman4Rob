@@ -1,11 +1,10 @@
 matplotlib==3.7.5
 numpy==1.24.4
-scipy
 torch==2.1.0
 tqdm==4.67.0
 tensorboard
+scipy
 # for mcap data loading
-# mcap-data-loader
-git+https://github.com/OpenGHz/MCAP-DataLoader.git
+mcap-data-loader @ git+https://github.com/OpenGHz/MCAP-DataLoader.git
 torchdata>=0.10.0
-transformers
+transformers==4.57.0

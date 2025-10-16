@@ -41,3 +41,7 @@ Thumbs.db
 .env
 logs/
 profile.*
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml

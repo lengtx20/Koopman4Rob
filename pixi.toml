@@ -1,0 +1,38 @@
+[workspace]
+authors = ["Haizhou Ge <1352674740@qq.com>"]
+channels = [
+    "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/",
+    "conda-forge",
+]
+name = "koopman4bot"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[system-requirements]
+cuda = "12.0"
+
+[pypi-options]
+index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+extra-index-urls = ["https://mirrors.aliyun.com/pypi/simple/"]
+
+[tasks]
+
+[dependencies]
+python = "3.10.*"
+# cuda-version = "12.0.*"
+torchvision = ">=0.23.0,<0.24"
+pytorch-gpu = "*"
+# Use realistic, available ranges from conda-forge
+matplotlib = ">=3.7,<4"
+numpy = ">=1.24,<2.3"
+tqdm = ">=4.67.1,<5"
+tensorboard = ">=2.20.0,<3"
+scipy = ">=1.10,<2"
+torchdata = ">=0.11.0,<0.12"
+transformers = ">=4.57.1,<5"
+## NOTE: Install typing_extensions via PyPI to avoid conda packaging issues in this env
+# typing_extensions = ">=4.15.0,<5"
+
+[pypi-dependencies]
+mcap-data-loader = { git = "https://github.com/OpenGHz/MCAP-DataLoader.git" }
+typing_extensions = "==4.15.0"
