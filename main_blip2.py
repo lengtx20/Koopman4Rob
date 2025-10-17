@@ -111,11 +111,7 @@ if __name__ == "__main__":
         help="model directory",
     )
     parser.add_argument(
-        "--blip2-model-dir",
-        "-bd",
-        type=str,
-        help="BLIP2 model directory",
-        required=True,
+        "--blip2-model-dir", "-bd", type=str, help="BLIP2 model directory", default=""
     )
     parser.add_argument(
         "--fisher-path",

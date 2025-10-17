@@ -2,57 +2,63 @@ from torchdata import nodes
 from mcap_data_loader.datasets.mcap_dataset import (
     McapFlatBuffersSampleDataset,
     SampleType,
-)
-from mcap_data_loader.utils.extra_itertools import Reusablizer
-from mcap_data_loader.datasets.mcap_dataset import (
     McapFlatBuffersEpisodeDataset,
     McapFlatBuffersEpisodeDatasetConfig,
 )
+from mcap_data_loader.utils.extra_itertools import Reusablizer
+from mcap_data_loader.piplines import NestedZip, NestedZipConfig, Merge, MergeConfig
 from more_itertools import pairwise
 from typing import Tuple, List
-from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
+
+# from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
 import torch
 
 
 def create_mcap_dataloader(
     model_path: str, datasets: list, batch_size: int, num_workers: int = 0, device=None
 ):
-    extractor = Blip2ImageFeatureExtractor(model_path, device)
-    extractor.load_model()
-
+    # extractor = Blip2ImageFeatureExtractor(model_path, device)
+    # extractor.load_model()
+    # device=extractor.device; dtype=extractor.dtype
+    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    dtype = torch.float32
     source_nodes = {}
     weights = {}
-    for episode in datasets:
-        episode: McapFlatBuffersSampleDataset
-        source_nodes[episode.config.data_root] = nodes.IterableWrapper(
-            Reusablizer(pairwise)(episode)
-        )
-        weights[episode.config.data_root] = 1.0
+
+    nested = NestedZip[McapFlatBuffersEpisodeDataset](NestedZipConfig(depth=1))(
+        datasets
+    )
+    for episodes in nested:
+        key = episodes[0].config.data_root.name
+        merged = Merge(MergeConfig(method="ChainMap"))(episodes)
+        source_nodes[key] = nodes.IterableWrapper(Reusablizer(pairwise)(merged))
+        weights[key] = 1.0
 
     node = nodes.MultiNodeWeightedSampler(
         source_nodes,
         weights,
         nodes.StopCriteria.ALL_DATASETS_EXHAUSTED,
     )
-    prompt = "Open the cabinet door with the vertical black handle"
+    # prompt = "Open the cabinet door with the vertical black handle"
     arm_key = "/follow/arm/joint_state/position"
     eef_key = "/follow/eef/joint_state/position"
     cam_key = "/env_camera/color/image_raw"
+    img_features_key = f"{cam_key}/features"
 
     def process_batched_sample(
         batched_samples: List[Tuple[SampleType, SampleType]],
     ) -> torch.Tensor:
         batched_list = []
-        mock_features = torch.zeros(256, dtype=extractor.dtype, device=extractor.device)
+        # mock_features = torch.zeros(256, dtype=extractor.dtype, device=extractor.device)
         for sample in batched_samples:
             tensor_samples = []
             for s in sample:
                 tensor_sample = {}
                 for key, value in s.items():
-                    if not value.flags.writeable:
-                        value = value.copy()
+                    # if not value.flags.writeable:
+                    #     value = value.copy()
                     tensor_sample[key] = torch.from_numpy(value).to(
-                        device=extractor.device, dtype=extractor.dtype
+                        device=device, dtype=dtype
                     )
                 tensor_samples.append(tensor_sample)
             sample_array = torch.concatenate(
@@ -61,9 +67,10 @@ def create_mcap_dataloader(
                     tensor_samples[0][arm_key],
                     tensor_samples[0][eef_key],
                     # action dim
-                    extractor.process_image(tensor_samples[0][cam_key], prompt).squeeze(
-                        0
-                    ),
+                    # extractor.process_image(tensor_samples[0][cam_key], prompt).squeeze(
+                    #     0
+                    # ),
+                    tensor_samples[0][img_features_key],
                     # mock_features,
                     # next state dim
                     tensor_samples[1][arm_key],
@@ -87,21 +94,47 @@ def create_train_val_dataloader(
     keys = [
         "/follow/arm/joint_state/position",
         "/follow/eef/joint_state/position",
-        "/env_camera/color/image_raw",
+        # "/env_camera/color/image_raw",
+        "/env_camera/color/image_raw/features",
     ]
-    dataset = McapFlatBuffersEpisodeDataset(
-        McapFlatBuffersEpisodeDatasetConfig(
-            data_root=data_root, keys=keys, strict=False
-        )
+    datasets = (
+        McapFlatBuffersEpisodeDataset(
+            McapFlatBuffersEpisodeDatasetConfig(
+                data_root=data_root, keys=keys[:2], strict=False
+            )
+        ),
+        McapFlatBuffersEpisodeDataset(
+            McapFlatBuffersEpisodeDatasetConfig(
+                data_root=f"{data_root}_blip2_features", keys=keys[2:], strict=False
+            )
+        ),
     )
-    dataset.load()
-    sample_datasets = list(dataset.read_stream())
-    num = len(sample_datasets)
-    train_num = int(num * 0.8)
+    splited_datasets = {"train": [], "val": []}
+    for dataset in datasets:
+        dataset.load()
+        sample_datasets = list(dataset.read_stream())
+        num = len(sample_datasets)
+        train_num = int(num * 0.8)
+        splited_datasets["train"].append(sample_datasets[:train_num])
+        splited_datasets["val"].append(sample_datasets[train_num:])
+    # check the names and lengths are matching
+    for key, value in splited_datasets.items():
+        if not all(len(v) == len(value[0]) for v in value):
+            raise ValueError(
+                f"Dataset lengths do not match in {key}: {[len(v) for v in value]}"
+            )
+        for sample_sets in zip(*value):
+            sample_sets: Tuple[McapFlatBuffersSampleDataset, ...]
+            name = sample_sets[0].config.data_root.name
+            for sample_set in sample_sets:
+                if sample_set.config.data_root.name != name:
+                    raise ValueError(
+                        f"Dataset names do not match: {sample_set.config.data_root.name} vs {name}"
+                    )
     train_loader = create_mcap_dataloader(
-        model_path, sample_datasets[:train_num], batch_size, num_workers, device
+        model_path, splited_datasets["train"], batch_size, num_workers, device
     )
     val_loader = create_mcap_dataloader(
-        model_path, sample_datasets[train_num:], batch_size, num_workers, device
+        model_path, splited_datasets["val"], batch_size, num_workers, device
     )
     return train_loader, val_loader
