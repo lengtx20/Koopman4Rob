@@ -90,7 +90,9 @@ def create_train_val_dataloader(
         "/env_camera/color/image_raw",
     ]
     dataset = McapFlatBuffersEpisodeDataset(
-        McapFlatBuffersEpisodeDatasetConfig(data_root=data_root, keys=keys)
+        McapFlatBuffersEpisodeDatasetConfig(
+            data_root=data_root, keys=keys, strict=False
+        )
     )
     dataset.load()
     sample_datasets = list(dataset.read_stream())

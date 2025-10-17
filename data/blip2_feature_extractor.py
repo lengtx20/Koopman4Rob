@@ -214,6 +214,7 @@ if __name__ == "__main__":
         McapFlatBuffersEpisodeDatasetConfig(
             data_root=input_dir,
             keys=keys,
+            strict=False,
         )
     )
     dataset.load()
