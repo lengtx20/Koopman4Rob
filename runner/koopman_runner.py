@@ -9,6 +9,7 @@ from tqdm import tqdm
 from utils.utils import smooth_curve
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
+from config import Config
 
 
 class KoopmanDataset(Dataset):
@@ -40,8 +41,7 @@ class KoopmanRunner:
         num_workers=0,
         ewc_lambda=0.0,
         tb_log_dir="logs/tensorboard",
-        data_root="",
-        model_path="",
+        config: Config = None,
     ):
         """
         model:      Deep Koopman model
@@ -68,12 +68,11 @@ class KoopmanRunner:
         self.vales = []
 
         # dataset
-        if data_root:
+        if config.data_dir:
             from data.mcap_data_utils import create_train_val_dataloader
 
             self.train_loader, self.val_loader = create_train_val_dataloader(
-                model_path,
-                data_root,
+                config,
                 batch_size,
                 num_workers,
                 0.8 if mode == "train" else 1.0,

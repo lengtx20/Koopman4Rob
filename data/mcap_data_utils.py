@@ -9,17 +9,13 @@ from mcap_data_loader.utils.extra_itertools import Reusablizer
 from mcap_data_loader.piplines import NestedZip, NestedZipConfig, Merge, MergeConfig
 from more_itertools import pairwise
 from typing import Tuple, List
-
-# from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
+from config import Config
 import torch
 
 
 def create_mcap_dataloader(
-    model_path: str, datasets: list, batch_size: int, num_workers: int = 0, device=None
+    config: Config, datasets: list, batch_size: int, num_workers: int = 0, device=None
 ):
-    # extractor = Blip2ImageFeatureExtractor(model_path, device)
-    # extractor.load_model()
-    # device=extractor.device; dtype=extractor.dtype
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float32
     source_nodes = {}
@@ -39,11 +35,9 @@ def create_mcap_dataloader(
         weights,
         nodes.StopCriteria.ALL_DATASETS_EXHAUSTED,
     )
-    # prompt = "Open the cabinet door with the vertical black handle"
+
     arm_key = "/follow/arm/joint_state/position"
     eef_key = "/follow/eef/joint_state/position"
-    cam_key = "/env_camera/color/image_raw"
-    img_features_key = f"{cam_key}/features"
 
     def process_batched_sample(
         batched_samples: List[Tuple[SampleType, SampleType]],
@@ -66,12 +60,7 @@ def create_mcap_dataloader(
                     # state dim
                     tensor_samples[0][arm_key],
                     tensor_samples[0][eef_key],
-                    # action dim
-                    # extractor.process_image(tensor_samples[0][cam_key], prompt).squeeze(
-                    #     0
-                    # ),
-                    tensor_samples[0][img_features_key],
-                    # mock_features,
+                    tensor_samples[0][config.img_features_keys[0]],
                     # next state dim
                     tensor_samples[1][arm_key],
                     tensor_samples[1][eef_key],
@@ -89,23 +78,27 @@ def create_mcap_dataloader(
 
 
 def create_train_val_dataloader(
-    model_path: str, data_root, batch_size, num_workers, ratio: float = 0.8, device=None
+    config: Config,
+    batch_size,
+    num_workers,
+    ratio: float = 0.8,
+    device=None,
 ):
     keys = [
         "/follow/arm/joint_state/position",
         "/follow/eef/joint_state/position",
-        # "/env_camera/color/image_raw",
-        "/env_camera/color/image_raw/features",
-    ]
+    ] + config.img_features_keys
     datasets = (
         McapFlatBuffersEpisodeDataset(
             McapFlatBuffersEpisodeDatasetConfig(
-                data_root=data_root, keys=keys[:2], strict=False
+                data_root=config.data_dir, keys=keys[:2], strict=False
             )
         ),
         McapFlatBuffersEpisodeDataset(
             McapFlatBuffersEpisodeDatasetConfig(
-                data_root=f"{data_root}_blip2_features", keys=keys[2:], strict=False
+                data_root=f"{config.data_dir}_blip2_features",
+                keys=keys[2:],
+                strict=False,
             )
         ),
     )
@@ -132,9 +125,9 @@ def create_train_val_dataloader(
                         f"Dataset names do not match: {sample_set.config.data_root.name} vs {name}"
                     )
     train_loader = create_mcap_dataloader(
-        model_path, splited_datasets["train"], batch_size, num_workers, device
+        config, splited_datasets["train"], batch_size, num_workers, device
     )
     val_loader = create_mcap_dataloader(
-        model_path, splited_datasets["val"], batch_size, num_workers, device
+        config, splited_datasets["val"], batch_size, num_workers, device
     )
     return train_loader, val_loader

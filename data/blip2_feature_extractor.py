@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 from transformers import Blip2ForImageTextRetrieval
 from transformers import AutoProcessor
 import torch
@@ -137,9 +137,7 @@ class Blip2ImageFeatureExtractor:
         self.processor = processor
         self.get_logger().info("Initialized.")
 
-    def process_image(
-        self, image: np.ndarray, prompt: str, project: bool = True
-    ) -> torch.Tensor:
+    def process_image(self, image: np.ndarray, prompt: str) -> Dict[str, torch.Tensor]:
         with torch.inference_mode():
             inputs: dict = self.processor(
                 images=image, text=prompt, return_tensors="pt"
@@ -159,12 +157,14 @@ class Blip2ImageFeatureExtractor:
             # [1, num_queries, 1]
             attention_weights_expanded = attention_weights.unsqueeze(-1)
             # [1, 768] or [1, 256]
-            image_features = image_embeds_proj if project else image_embeds
-            weighted_image_embeds = (image_features * attention_weights_expanded).sum(
-                dim=1
-            )
+            wie_list = []
+            for image_features in (image_embeds, image_embeds_proj):
+                weighted_image_embeds = (
+                    image_features * attention_weights_expanded
+                ).sum(dim=1)
+                wie_list.append(weighted_image_embeds)
             # print("Final weighted image embeds shape:", weighted_image_embeds.shape)
-            return weighted_image_embeds
+            return {"features": wie_list[0], "features_proj": wie_list[1]}
 
     def get_logger(self) -> logging.Logger:
         return logging.getLogger(self.__class__.__name__)
@@ -197,6 +197,24 @@ if __name__ == "__main__":
         default="",
         help="Directory to save the output",
     )
+    parser.add_argument(
+        "--prompt",
+        "-prom",
+        type=str,
+        help="Prompt for feature extraction",
+        default="Open the door with the vertical black handle",
+    )
+    parser.add_argument(
+        "--keys",
+        "-k",
+        type=str,
+        nargs="+",
+        help="Keys to extract features from",
+        default=[
+            "/env_camera/color/image_raw",
+            # "/follow_camera/color/image_raw",
+        ],
+    )
     parser.add_argument("--model-path", "-mp", type=str, help="Path to the BLIP2 model")
     args = parser.parse_args()
 
@@ -207,9 +225,7 @@ if __name__ == "__main__":
     extractor.load_model()
 
     input_dir = Path(args.input_directory)
-    keys = [
-        "/env_camera/color/image_raw",
-    ]
+    keys = args.keys
     dataset = McapFlatBuffersEpisodeDataset(
         McapFlatBuffersEpisodeDatasetConfig(
             data_root=input_dir,
@@ -231,15 +247,20 @@ if __name__ == "__main__":
         writer.create_writer(output_dir / episode.config.data_root.name, overwrite=True)
         for key in keys:
             writer.register_channel(f"{key}/features", FlatBuffersSchemas.FLOAT_ARRAY)
+            writer.register_channel(
+                f"{key}/features_proj", FlatBuffersSchemas.FLOAT_ARRAY
+            )
         for sample in tqdm(episode, desc="Processing samples", total=len(episode)):
             # pprint(sample)
             for key, value in sample.items():
-                features = extractor.process_image(
-                    value, "Open the door with the vertical black handle"
-                ).squeeze(0)
-                # print(features.shape)
-                writer.add_array(
-                    f"{key}/features", features.tolist(), time_ns(), time_ns()
-                )
+                features_dict = extractor.process_image(value, args.prompt)
+                for feature_key, features in features_dict.items():
+                    # print(features.shape)
+                    writer.add_array(
+                        f"{key}/{feature_key}",
+                        features.squeeze(0).tolist(),
+                        time_ns(),
+                        time_ns(),
+                    )
         writer.unset_writer(finish=True)
     print("Done")
