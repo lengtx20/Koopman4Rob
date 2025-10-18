@@ -89,7 +89,7 @@ def create_mcap_dataloader(
 
 
 def create_train_val_dataloader(
-    model_path: str, data_root, batch_size, num_workers, device=None
+    model_path: str, data_root, batch_size, num_workers, ratio: float = 0.8, device=None
 ):
     keys = [
         "/follow/arm/joint_state/position",
@@ -114,7 +114,7 @@ def create_train_val_dataloader(
         dataset.load()
         sample_datasets = list(dataset.read_stream())
         num = len(sample_datasets)
-        train_num = int(num * 0.8)
+        train_num = int(num * ratio)
         splited_datasets["train"].append(sample_datasets[:train_num])
         splited_datasets["val"].append(sample_datasets[train_num:])
     # check the names and lengths are matching
