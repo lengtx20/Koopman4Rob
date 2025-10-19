@@ -2,7 +2,6 @@
 
 import torch
 import torch.optim as optim
-import os
 from torch.nn import MSELoss
 from models.deep_koopman import Deep_Koopman
 from runner.koopman_runner import KoopmanRunner
@@ -56,21 +55,20 @@ def run(config: Config):
     model_dir = config.model_dir
     mode = config.mode
     if mode == "train":
-        if os.path.exists(model_dir):
+        if model_dir.exists():
             idx = 0
             while True:
-                new_dir = model_dir + f"{idx}"
-                if not os.path.exists(new_dir):
+                new_dir = model_dir.parent / f"{model_dir.name}{idx}"
+                if not new_dir.exists():
                     model_dir = new_dir
                     print(f"[INFO] Model dir exists. Change to {model_dir}")
                     break
                 idx += 1
-        os.makedirs(os.path.dirname(model_dir) or ".", exist_ok=True)
-
+        model_dir.mkdir(parents=True, exist_ok=True)
         runner.train(
             max_epochs=150,
             save_model=True,
-            model_dir=model_dir,
+            model_dir=str(model_dir),
             task_id=1,
             fisher_path=config.fisher_path,
             # threshold_mode="neural_ratio",
