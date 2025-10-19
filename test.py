@@ -1,24 +1,9 @@
-from data.mcap_data_utils import create_train_val_dataloader
+import torch
 
+# 创建一个示例矩阵 (3行4列)
+x = torch.tensor([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0], [9.0, 10.0, 11.0, 12.0]])
 
-model_path = "/home/ghz/blip2-itm-vit-g"
-data_root = "/home/ghz/Work/OpenGHz/MCAP-DataLoader/data/example"
-batch_size = 2
-num_workers = 0
-device = None
+# 沿着行方向（即对每行）求均值：dim=1
+row_means = x.mean(dim=0)
 
-train_loader, val_loader = create_train_val_dataloader(
-    model_path, data_root, batch_size, num_workers, device
-)
-
-for batch in train_loader:
-    print(batch.shape)
-    assert batch.shape[0] == batch_size
-    assert batch.shape[1] == 7 + 256 + 7
-    # for item in batch:
-    #     print(item.shape)
-    #     assert item.shape[0] == 7 + 256 + 7
-    #     # print(item.keys())
-    #     # for key, value in item.items():
-    #     #     print(f"{key}: {value[0].shape}")
-    break
+print(row_means)

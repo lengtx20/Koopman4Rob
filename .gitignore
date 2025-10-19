@@ -46,3 +46,4 @@ profile.*
 .pixi/*
 !.pixi/config.toml
 outputs/
+mcap_data/

@@ -5,11 +5,14 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import datetime
+import json
+import time
 from tqdm import tqdm
 from utils.utils import smooth_curve
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
 from config import Config
+from pprint import pprint
 
 
 class KoopmanDataset(Dataset):
@@ -417,23 +420,19 @@ class KoopmanRunner:
     def test(
         self,
         dataset="val",
-        model_dir=None,
-        show_plot=True,
-        save_results=True,
-        rollout_steps=1,
+        config: Config = None,
     ):
         """
         Test model on given dataset (train/val).
         Args:
             dataset: str, "train" or "val"
-            model_dir: str, path to load model
-            show_plot: bool, whether to visualize trajectories
-            save_results: bool, whether to save trajectory and metrics
-            rollout_steps: int, number of steps for rollout prediction (>=1)
+            config: Config, configuration object containing test settings
         """
         # ----- load model -----
-        if model_dir is not None:
-            self.model.load(model_dir=model_dir)
+        model_dir = config.model_dir
+        test_config = config.test
+        rollout_steps = test_config.rollout_steps
+        self.model.load(model_dir=model_dir)
         self.model.eval()
 
         # ----- select dataset -----
@@ -447,9 +446,12 @@ class KoopmanRunner:
         traj = []
         total_loss, total_mae = 0, 0
         n_samples = 0
-
+        total_array_sum = torch.zeros(self.state_dim, device=self.device)
+        array_max = torch.zeros(self.state_dim, device=self.device)
+        array_min = torch.zeros(self.state_dim, device=self.device) + 1e4
         with torch.no_grad():
-            for batch in loader:
+            start_time = time.monotonic()
+            for index, batch in enumerate(loader):
                 batch = batch.to(self.device)
                 x_t = batch[:, : self.state_dim]
                 a_t = batch[:, self.state_dim : self.state_dim + self.action_dim]
@@ -471,37 +473,45 @@ class KoopmanRunner:
                     pred_x_t1 = pred_x_t1[-1]  # 取最后一步预测
 
                 # ----- loss & metrics -----
+                actual_bs = batch.size(0)
                 loss = self.loss_fn(pred_x_t1, x_t1)
-                total_loss += loss.item() * batch.size(0)
-                total_mae += torch.mean(
-                    torch.abs(pred_x_t1 - x_t1)
-                ).item() * batch.size(0)
-                n_samples += batch.size(0)
+                total_loss += loss.item() * actual_bs
+                abs_error = torch.abs(pred_x_t1 - x_t1)
+                array_sum = abs_error.sum(dim=0)
+                array_max = torch.maximum(array_max, abs_error.max(dim=0).values)
+                array_min = torch.minimum(array_min, abs_error.min(dim=0).values)
+                total_array_sum += array_sum
+                total_mae += torch.mean(abs_error).item() * actual_bs
+                n_samples += actual_bs
 
-                # ----- 保存轨迹 -----
-                traj.append(
-                    torch.cat(
-                        [x_t.cpu(), a_t.cpu(), x_t1.cpu(), pred_x_t1.cpu()], dim=1
-                    ).numpy()
-                )
+                # ----- record the trajectory -----
+                # to cpu, do not waste gpu memory
+                traj.append(torch.cat([x_t, a_t, x_t1, pred_x_t1], dim=1).cpu().numpy())
 
-        # ----- 结果统计 -----
-        avg_loss = total_loss / n_samples
-        avg_mae = total_mae / n_samples
+        # ----- summary -----
+        avg_array_mae = (total_array_sum / n_samples).cpu().numpy()
+        metrics_dict = {
+            "avg_time_per_batch": (time.monotonic() - start_time) / (index + 1),
+            "avg_mse": total_loss / n_samples,
+            "avg_rmse": np.sqrt(total_loss / n_samples),
+            "avg_mae": total_mae / n_samples,
+            "avg_array_mae_rad": avg_array_mae.tolist(),
+            "avg_array_mae_deg": (avg_array_mae * 57.2958).tolist(),
+            "max_array_mae_deg": (array_max.cpu().numpy() * 57.2958).tolist(),
+            "min_array_mae_deg": (array_min.cpu().numpy() * 57.2958).tolist(),
+        }
         self.traj_np = np.concatenate(traj, axis=0)
         print("[INFO] Trajectory shape:", self.traj_np.shape)
-
-        print(f"[Test-{dataset}] Avg Loss: {avg_loss:.4f}, Avg MAE: {avg_mae:.4f}")
-
-        # ----- 保存结果 -----
-        if save_results and model_dir is not None:
-            np.save(os.path.join(model_dir, f"{dataset}_traj.npy"), self.traj_np)
-            with open(os.path.join(model_dir, f"{dataset}_metrics.txt"), "w") as f:
-                f.write(f"Avg Loss: {avg_loss}\nAvg MAE: {avg_mae}\n")
+        pprint(metrics_dict)
+        # ----- save the results -----
+        if test_config.save_results:
+            np.save(model_dir / f"{dataset}_traj.npy", self.traj_np)
+            with open(model_dir / f"{dataset}_metrics.json", "w") as f:
+                json.dump(metrics_dict, f, indent=4)
             print(f"[Test-{dataset}] Results saved to {model_dir}")
 
-        # ----- 可视化 -----
-        if show_plot:
+        # ----- visualization -----
+        if test_config.show_plot:
             self.plot_trajectory()
 
     def plot_trajectory(self, use_smooth=True):

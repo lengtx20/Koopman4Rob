@@ -79,9 +79,7 @@ def run(config: Config):
         )
         print(f"[INFO] Model saved to {model_dir}")
     elif mode == "test":
-        runner.test(
-            dataset="train", model_dir=model_dir, save_results=False, rollout_steps=1
-        )
+        runner.test("train", config)
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
 

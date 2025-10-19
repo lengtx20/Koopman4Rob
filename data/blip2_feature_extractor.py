@@ -181,9 +181,10 @@ if __name__ == "__main__":
         McapFlatBuffersWriter,
         FlatBuffersSchemas,
     )
-    from time import time_ns
+    from time import time_ns, monotonic
     from pathlib import Path
     from tqdm import tqdm
+    from concurrent.futures import ThreadPoolExecutor as PoolExecutor, as_completed
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -212,10 +213,13 @@ if __name__ == "__main__":
         help="Keys to extract features from",
         default=[
             "/env_camera/color/image_raw",
-            # "/follow_camera/color/image_raw",
+            "/follow_camera/color/image_raw",
         ],
     )
     parser.add_argument("--model-path", "-mp", type=str, help="Path to the BLIP2 model")
+    parser.add_argument(
+        "--num-workers", "-nw", type=int, default=4, help="Number of workers"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -239,7 +243,9 @@ if __name__ == "__main__":
         output_dir = input_dir.parent / f"{input_dir.name}_blip2_features"
     else:
         output_dir = Path(output_dir)
-    for index, episode in enumerate(dataset):
+    executor = PoolExecutor(max_workers=args.num_workers)
+
+    def process_episode(index, episode):
         print(
             f"Processing episode {index + 1}/{len(dataset)}: {episode.config.data_root}"
         )
@@ -263,4 +269,15 @@ if __name__ == "__main__":
                         time_ns(),
                     )
         writer.unset_writer(finish=True)
-    print("Done")
+
+    start = monotonic()
+    futures = []
+    for index, episode in enumerate(dataset):
+        futures.append(executor.submit(process_episode, index, episode))
+    for index, future in enumerate(as_completed(futures)):
+        future.result()
+    executor.shutdown(wait=True)
+    cost_time = monotonic() - start
+    print(
+        f"All done in {cost_time:.2f} seconds ({cost_time / (index + 1):.2f} seconds per episode)."
+    )
