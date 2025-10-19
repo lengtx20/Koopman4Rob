@@ -1,6 +1,5 @@
 """This file provides the implementation of the training procedure"""
 
-import os
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
@@ -29,21 +28,13 @@ class KoopmanDataset(Dataset):
 class KoopmanRunner:
     def __init__(
         self,
-        mode,
         model,
-        ewc_model,
-        state_dim,
-        action_dim,
         train_data,
         val_data,
         optimizer,
         loss_fn,
         device,
         normalize=False,
-        batch_size=64,
-        num_workers=0,
-        ewc_lambda=0.0,
-        tb_log_dir="logs/tensorboard",
         config: Config = None,
     ):
         """
@@ -52,23 +43,27 @@ class KoopmanRunner:
                     This is to assure the consistency of the model.
         """
         # params
-        self.mode = mode
+        self.mode = config.mode
         self.model = model.to(device)
-        self.ewc_model = ewc_model
-        self.state_dim = state_dim
-        self.action_dim = action_dim
+        self.ewc_model = config.ewc_model
+        self.state_dim = config.model.state_dim
+        self.action_dim = config.model.action_dim
         self.train_data = train_data
         self.val_data = val_data
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.device = device
         self.normalize = normalize
-        self.ewc_lambda = ewc_lambda
-        self.num_workers = num_workers
-        self.tb_log_dir = tb_log_dir
+        self.ewc_lambda = config.ewc_lambda
+        self.num_workers = config.num_workers
+        self.tb_log_dir = config.tb_log_dir
 
         self.losses = []
         self.vales = []
+
+        batch_size = config.batch_size
+        mode = config.mode
+        num_workers = config.num_workers
 
         # dataset
         if config.data_dir:
@@ -283,34 +278,24 @@ class KoopmanRunner:
         else:
             print("[Warning] No valid Fisher info for encoder.layers.6.bias")
 
-    def train(
-        self,
-        max_epochs=100,
-        save_model=True,
-        model_dir=None,
-        task_id=1,
-        ewc_regularization=False,
-        fisher_path=None,
-        threshold_mode=None,
-        ewc_threshold=0.0,
-    ):
+    def train(self, config: Config):
         """
         Called by 'train' mode.
         """
         self.model.train()
         best_val_loss = float("inf")
-
-        if threshold_mode is not None:
+        train_cfg = config.train
+        if train_cfg.threshold_mode is not None:
             self.fisher_dict = None
-            self.load_fisher(fisher_path=fisher_path)
+            self.load_fisher(fisher_path=train_cfg.fisher_path)
 
         # tensorboard
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.tb_log_dir = os.path.join(self.tb_log_dir, f"{timestamp}")
+        self.tb_log_dir = self.tb_log_dir / f"{timestamp}"
         self.writer = SummaryWriter(log_dir=self.tb_log_dir)
         print(f"[INFO] TensorBoard logs will be saved to {self.tb_log_dir}")
 
-        epoch_bar = tqdm(range(max_epochs), desc="[Training]", position=0)
+        epoch_bar = tqdm(range(train_cfg.max_epochs), desc="[Training]", position=0)
         for epoch in epoch_bar:
             # ----- training step -----
             total_loss = 0
@@ -327,7 +312,7 @@ class KoopmanRunner:
                 pred_x_t1 = self.model(x_t, a_t, False)
                 loss = self.loss_fn(pred_x_t1, x_t1)
 
-                if ewc_regularization:
+                if train_cfg.ewc_regularization:
                     if self.ewc_model is not None and self.ewc_model.fisher is not None:
                         loss += self.ewc_lambda * self.ewc_model.penalty(self.model)
 
@@ -385,23 +370,17 @@ class KoopmanRunner:
         self.writer.close()
 
         # ----- save models and losses & vales -----
-        if save_model and model_dir is not None:
-            os.makedirs(model_dir, exist_ok=True)
+        save_model = config.checkpoint_path is not None
+        if save_model:
+            model_dir = config.checkpoint_path
+            model_dir.mkdir(parents=True, exist_ok=True)
             self.model.save(model_dir=model_dir)
             print(f"[Runner] Model saved to {model_dir}")
-        else:
-            print("[INFO] No Koopman model saved")
-
-        if save_model and model_dir is not None:
-            self.model.save(model_dir=model_dir)
-            print(f"[Runner] Model saved to {model_dir}")
-        else:
-            print("[INFO] No Koopman model saved")
-
-        if save_model and model_dir is not None:
-            np.save(os.path.join(model_dir, "losses.npy"), self.losses)
-            np.save(os.path.join(model_dir, "vales.npy"), self.vales)
+            np.save(model_dir / "losses.npy", np.array(self.losses))
+            np.save(model_dir / "vales.npy", np.array(self.vales))
             print(f"[Runner] Losses and vales saved to {model_dir}")
+        else:
+            print("[INFO] No Koopman model saved")
 
         # ----- compute fisher and save fisher info -----
         print("[INFO] Computing Fisher Information after training...")
@@ -413,7 +392,7 @@ class KoopmanRunner:
             self.ewc_model.fisher = fisher
             print("[INFO] Fisher matrix updated.")
             if save_model and model_dir is not None:
-                self.ewc_model.save(model_dir=model_dir, task_id=task_id)
+                self.ewc_model.save(model_dir=model_dir, task_id=train_cfg.task_id)
         else:
             print("[INFO] No EWC model attached or invalid.")
 
@@ -429,7 +408,7 @@ class KoopmanRunner:
             config: Config, configuration object containing test settings
         """
         # ----- load model -----
-        model_dir = config.model_dir
+        model_dir = config.checkpoint_path
         test_config = config.test
         rollout_steps = test_config.rollout_steps
         self.model.load(model_dir=model_dir)
