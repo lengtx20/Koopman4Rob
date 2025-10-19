@@ -296,6 +296,7 @@ class KoopmanRunner:
         print(f"[INFO] TensorBoard logs will be saved to {self.tb_log_dir}")
 
         epoch_bar = tqdm(range(train_cfg.max_epochs), desc="[Training]", position=0)
+        start_time = time.monotonic()
         for epoch in epoch_bar:
             # ----- training step -----
             total_loss = 0
@@ -367,6 +368,15 @@ class KoopmanRunner:
                     )
             epoch_bar.set_postfix(postfix)
 
+        total_time = (time.monotonic() - start_time) / 60.0  # in minutes
+        total_time_per_epoch = total_time / train_cfg.max_epochs
+        metrics = {
+            "total_time_minutes": total_time,
+            "total_time_minutes_per_epoch": total_time_per_epoch,
+            "total_time_minutes_per_epoch_no_batch": total_time_per_epoch
+            * config.batch_size,
+        }
+
         self.writer.close()
 
         # ----- save models and losses & vales -----
@@ -378,7 +388,9 @@ class KoopmanRunner:
             print(f"[Runner] Model saved to {model_dir}")
             np.save(model_dir / "losses.npy", np.array(self.losses))
             np.save(model_dir / "vales.npy", np.array(self.vales))
-            print(f"[Runner] Losses and vales saved to {model_dir}")
+            with open(model_dir / "training_metrics.json", "w") as f:
+                json.dump(metrics, f, indent=4)
+            print(f"[Runner] Losses, vales and metrics saved to {model_dir}")
         else:
             print("[INFO] No Koopman model saved")
 

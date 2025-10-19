@@ -1,5 +1,6 @@
-from pydantic import BaseModel, PositiveInt
-from typing import List, Optional, Literal, Any
+from pydantic import BaseModel, PositiveInt, NonNegativeInt, NonNegativeFloat, Field
+from typing import List, Optional, Literal, Any, Set
+from functools import cache, cached_property
 from pathlib import Path
 
 
@@ -63,6 +64,60 @@ class TestConfig(BaseModel):
     rollout_steps: PositiveInt = 1
 
 
+class KeyConditionConfig(BaseModel):
+    necessary: Set[str] = set()
+    sufficient: Set[str] = set()
+
+    @cached_property
+    def keys(self) -> Set[str]:
+        return self.necessary | self.sufficient
+
+
+class TrainIterationConfig(BaseModel):
+    """Configuration for controlling training process.
+    Args:
+        iter_mode: Literal["epoch", "step", "sample"], mode of iteration control.
+    """
+
+    iter_mode: Literal["epoch", "step", "sample"] = "epoch"
+    iter_max: NonNegativeInt = 0
+    iter_min: NonNegativeInt = 0
+    patience: NonNegativeInt = 0
+    max_train_loss: NonNegativeFloat = 0.0
+    min_train_loss: NonNegativeFloat = 0.0
+    max_val_loss: NonNegativeFloat = 0.0
+    min_val_loss: NonNegativeFloat = 0.0
+    max_time: NonNegativeFloat = 0.0
+    conditions: KeyConditionConfig = KeyConditionConfig()
+
+    def model_post_init(self, context):
+        valid_keys = self.get_valid_keys()
+        if self.conditions.keys:
+            invalid_keys = self.conditions.keys - valid_keys
+            if invalid_keys:
+                raise ValueError(f"Invalid priority keys: {invalid_keys}")
+            min_in_suffi = self.conditions.sufficient & self.get_valid_keys("min")
+            if min_in_suffi:
+                raise ValueError(
+                    f"min keys {min_in_suffi} can not be sufficient conditions"
+                )
+        else:
+            for key in self.model_fields_set & valid_keys:
+                if getattr(self, key) != 0:
+                    if "min" in key:
+                        self.conditions.necessary.add(key)
+                    else:
+                        self.conditions.sufficient.add(key)
+
+    @classmethod
+    @cache
+    def get_valid_keys(cls, matching: str = "") -> Set[str]:
+        keys = cls.model_fields.keys() - {"conditions", "iter_mode"}
+        if matching:
+            return {key for key in keys if matching in key}
+        return keys
+
+
 class TrainConfig(BaseModel):
     """Configuration for training.
     Args:
@@ -70,13 +125,13 @@ class TrainConfig(BaseModel):
         batch_size: PositiveInt, batch size for training (>=1).
     """
 
-    max_epochs: PositiveInt = 150
     task_id: PositiveInt = 1
     fisher_path: Optional[Path] = None
     threshold_mode: Optional[Literal["neural_ratio", "ewc_loss"]] = None
     ewc_threshold: float = 1.0
     ewc_regularization: bool = False
     loss_fn: Any = "MSELoss"
+    iteration: TrainIterationConfig = Field(default_factory=TrainIterationConfig)
 
 
 class ModelConfig(BaseModel):
