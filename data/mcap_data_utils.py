@@ -36,9 +36,6 @@ def create_mcap_dataloader(
         nodes.StopCriteria.ALL_DATASETS_EXHAUSTED,
     )
 
-    arm_key = "/follow/arm/joint_state/position"
-    eef_key = "/follow/eef/joint_state/position"
-
     def process_batched_sample(
         batched_samples: List[Tuple[SampleType, SampleType]],
     ) -> torch.Tensor:
@@ -58,12 +55,14 @@ def create_mcap_dataloader(
             sample_array = torch.concatenate(
                 [
                     # state dim
-                    tensor_samples[0][arm_key],
-                    tensor_samples[0][eef_key],
+                    tensor_samples[0][key]
+                    for key in config.robot_state_keys
+                ]
+                + [
                     tensor_samples[0][config.img_features_keys[0]],
-                    # next state dim
-                    tensor_samples[1][arm_key],
-                    tensor_samples[1][eef_key],
+                ]
+                + [  # next state dim
+                    tensor_samples[1][key] for key in config.robot_action_keys
                 ]
             ).to(dtype=torch.float32)
             batched_list.append(sample_array)
@@ -84,20 +83,16 @@ def create_train_val_dataloader(
     ratio: float = 0.8,
     device=None,
 ):
-    keys = [
-        "/follow/arm/joint_state/position",
-        "/follow/eef/joint_state/position",
-    ] + config.img_features_keys
     datasets = (
         McapFlatBuffersEpisodeDataset(
             McapFlatBuffersEpisodeDatasetConfig(
-                data_root=config.data_dir, keys=keys[:2], strict=False
+                data_root=config.data_dir, keys=config.robot_action_keys, strict=False
             )
         ),
         McapFlatBuffersEpisodeDataset(
             McapFlatBuffersEpisodeDatasetConfig(
                 data_root=f"{config.data_dir}_blip2_features",
-                keys=keys[2:],
+                keys=config.img_features_keys,
                 strict=False,
             )
         ),

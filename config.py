@@ -43,6 +43,11 @@ class CommonConfig(BaseModel):
     seed: int = 42
     batch_size: PositiveInt = 64
     num_workers: int = 0
+    robot_state_keys: List[str] = []
+    robot_action_keys: List[str] = [
+        "/follow/arm/joint_state/position",
+        # "/follow/eef/joint_state/position",
+    ]
     img_features_keys: List[str] = [f"{cam}/{feature_suffix}" for cam in cam_keys]
     ewc_model: Optional[Path] = None
     ewc_lambda: float = 100.0
@@ -59,7 +64,6 @@ class CommonConfig(BaseModel):
 
         self.checkpoints_dir = process_path(self.checkpoints_dir)
         self.checkpoint_path = process_path(self.checkpoint_path, self.checkpoints_dir)
-        self.data_dir = process_path(self.data_dir)
         self.tb_log_dir = process_path(self.tb_log_dir)
 
 
@@ -207,7 +211,7 @@ class ModelConfig(BaseModel):
         lifted_dim: PositiveInt, dimension of the lifted space (>=1).
     """
 
-    state_dim: int = 7
+    state_dim: int = 0
     action_dim: int = 256
     hidden_sizes: List[int] = [512, 512, 512]
     lifted_dim: PositiveInt = 256
@@ -239,3 +243,15 @@ class Config(CommonConfig):
         ],
     )
     test: TestConfig = TestConfig()
+
+    def model_post_init(self, context):
+        super().model_post_init(context)
+        # TODO: use warming up to determine the state_dim and action_dim if 0
+        state_dim = 6 if len(self.robot_action_keys) == 1 else 7
+        if self.model.state_dim == 0:
+            self.model.state_dim = state_dim
+        else:
+            assert self.model.state_dim == state_dim, (
+                f"Configured state_dim {self.model.state_dim} does not match "
+                f"the data state_dim {state_dim}"
+            )
