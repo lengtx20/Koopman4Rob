@@ -209,7 +209,8 @@ if __name__ == "__main__":
         "-prom",
         type=str,
         help="Prompt for feature extraction",
-        default="Open the door with the vertical black handle",
+        default="Open the cabinet door",
+        # default="Open the drawer with the black handle",
     )
     parser.add_argument(
         "--keys",

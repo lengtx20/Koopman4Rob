@@ -534,24 +534,28 @@ class KoopmanRunner:
                 actual_bs = batch.size(0)
                 loss = self.loss_fn(pred_x_t1, x_t1)
                 total_loss += loss.item() * actual_bs
+                n_samples += actual_bs
                 abs_error = torch.abs(pred_x_t1 - x_t1)
                 array_sum = abs_error.sum(dim=0)
                 array_max = torch.maximum(array_max, abs_error.max(dim=0).values)
                 array_min = torch.minimum(array_min, abs_error.min(dim=0).values)
                 total_array_sum += array_sum
                 total_mae += torch.mean(abs_error).item() * actual_bs
-                n_samples += actual_bs
 
                 # ----- record the trajectory -----
                 # to cpu, do not waste gpu memory
                 traj.append(torch.cat([x_t, a_t, x_t1, pred_x_t1], dim=1).cpu().numpy())
 
         # ----- summary -----
+        avg_mse = total_loss / n_samples
+        avg_rmse = np.sqrt(avg_mse)
+        avg_rmse_deg = avg_rmse / np.pi * 180
         avg_array_mae = (total_array_sum / n_samples).cpu().numpy()
         metrics_dict = {
             "avg_time_per_batch": (time.monotonic() - start_time) / (index + 1),
-            "avg_mse": total_loss / n_samples,
-            "avg_rmse": np.sqrt(total_loss / n_samples),
+            "avg_mse": avg_mse,
+            "avg_rmse": avg_rmse,
+            "avg_rmse_deg": avg_rmse_deg,
             "avg_mae": total_mae / n_samples,
             "avg_array_mae_rad": avg_array_mae.tolist(),
             "avg_array_mae_deg": (avg_array_mae * 57.2958).tolist(),

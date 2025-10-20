@@ -40,6 +40,7 @@ def run(config: Config):
     # ===== start main function ===== #
     model_dir = config.checkpoint_path
     mode = config.mode
+    print(f"[INFO] Mode: {mode}. Model dir: {model_dir}")
     if mode == "train":
         if model_dir.exists():
             idx = 0
