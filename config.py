@@ -49,6 +49,7 @@ class CommonConfig(BaseModel):
         # "/follow/eef/joint_state/position",
     ]
     img_features_keys: List[str] = [f"{cam}/{feature_suffix}" for cam in cam_keys]
+    pair_gap: NonNegativeInt = 0
     ewc_model: Optional[Path] = None
     ewc_lambda: float = 100.0
     tb_log_dir: Path = Path("tensorboard")

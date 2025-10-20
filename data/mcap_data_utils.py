@@ -5,11 +5,11 @@ from mcap_data_loader.datasets.mcap_dataset import (
     McapFlatBuffersEpisodeDataset,
     McapFlatBuffersEpisodeDatasetConfig,
 )
-from mcap_data_loader.utils.extra_itertools import Reusablizer
+from mcap_data_loader.utils.extra_itertools import Reusablizer, epairwise
 from mcap_data_loader.piplines import NestedZip, NestedZipConfig, Merge, MergeConfig
-from more_itertools import pairwise
 from typing import Tuple, List
 from config import Config
+from functools import partial
 import torch
 
 
@@ -27,7 +27,11 @@ def create_mcap_dataloader(
     for episodes in nested:
         key = episodes[0].config.data_root.name
         merged = Merge(MergeConfig(method="ChainMap"))(episodes)
-        source_nodes[key] = nodes.IterableWrapper(Reusablizer(pairwise)(merged))
+        source_nodes[key] = nodes.IterableWrapper(
+            Reusablizer(partial(epairwise, gap=config.pair_gap, fill_with_last=True))(
+                merged
+            )
+        )
         weights[key] = 1.0
 
     node = nodes.MultiNodeWeightedSampler(
@@ -40,26 +44,21 @@ def create_mcap_dataloader(
         batched_samples: List[Tuple[SampleType, SampleType]],
     ) -> torch.Tensor:
         batched_list = []
-        # mock_features = torch.zeros(256, dtype=extractor.dtype, device=extractor.device)
         for sample in batched_samples:
             tensor_samples = []
+            # convert to tensor and move to device
             for s in sample:
                 tensor_sample = {}
                 for key, value in s.items():
-                    # if not value.flags.writeable:
-                    #     value = value.copy()
                     tensor_sample[key] = torch.from_numpy(value).to(
                         device=device, dtype=dtype
                     )
                 tensor_samples.append(tensor_sample)
             sample_array = torch.concatenate(
                 [
-                    # state dim
+                    # state dim + action dim
                     tensor_samples[0][key]
-                    for key in config.robot_state_keys
-                ]
-                + [
-                    tensor_samples[0][config.img_features_keys[0]],
+                    for key in config.robot_action_keys + config.img_features_keys
                 ]
                 + [  # next state dim
                     tensor_samples[1][key] for key in config.robot_action_keys

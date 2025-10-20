@@ -8,13 +8,6 @@ from config import Config
 
 
 def run(config: Config):
-    """
-    mode:       select between train / test
-    data_path:  path to the npy file.
-                The structure of the data need to be (num_sample, x_t + a_t + x_t1).
-    model_dir:  path to the Deep Koopman model.
-                The model will be save to (or load from) this dir when training (or testing).
-    """
     device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if not config.device

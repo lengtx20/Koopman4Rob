@@ -114,10 +114,9 @@ class KoopmanRunner:
         """
         sample = data[i]
         x_t = sample[: self.model.state_dim]
-        a_t = sample[
-            self.model.state_dim : self.model.state_dim + self.model.action_dim
-        ]
-        x_t1 = sample[-self.model.state_dim :]
+        action_end = self.state_dim + self.action_dim
+        a_t = sample[self.model.state_dim : action_end]
+        x_t1 = sample[action_end:]
         if self.normalize:
             x_t = (x_t - self.state_mean) / self.state_std
             a_t = (a_t - self.action_mean) / self.action_std
@@ -512,8 +511,9 @@ class KoopmanRunner:
             for index, batch in enumerate(loader):
                 batch = batch.to(self.device)
                 x_t = batch[:, : self.state_dim]
-                a_t = batch[:, self.state_dim : self.state_dim + self.action_dim]
-                x_t1 = batch[:, -self.state_dim :]
+                action_end = self.state_dim + self.action_dim
+                a_t = batch[:, self.state_dim : action_end]
+                x_t1 = batch[:, action_end:]
 
                 # ----- 单步 or 多步预测 -----
                 if rollout_steps == 1:

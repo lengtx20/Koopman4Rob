@@ -173,7 +173,7 @@ class Deep_Koopman(nn.Module):
         self.init_matrix()
 
         for param in self.parameters():
-            print(type(param), param.size())
+            # print(type(param), param.size())
             param.requires_grad = requires_grad
 
     def set_seed(self, seed):
