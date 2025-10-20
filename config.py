@@ -1,5 +1,11 @@
-from pydantic import BaseModel, PositiveInt, NonNegativeInt, NonNegativeFloat, Field
-from typing import List, Optional, Literal, Any, Set
+from pydantic import (
+    BaseModel,
+    PositiveInt,
+    NonNegativeInt,
+    NonNegativeFloat,
+    Field,
+)
+from typing import List, Optional, Literal, Any, Set, Dict
 from functools import cache, cached_property
 from pathlib import Path
 
@@ -14,13 +20,19 @@ class CommonConfig(BaseModel):
     but the values are not necessarily the same in both cases.
     Args:
         root_dir: Path, root directory for saving logs and checkpoints.
-        checkpoints_dir: Optional[Path], directory for saving model checkpoints.
-            If None, checkpoints will not be saved.
-        data_dir: str, path to the data directory.
-        model_dir: Path, path to the model directory.
-        fisher_path: Optional[str], path to the Fisher information matrix file.
-        mode: Literal["test", "train"], mode of operation.
+        checkpoints_dir: Path, directory for saving model checkpoints.
+        checkpoint_path: Optional[Path], path to a specific model checkpoint.
+            If None, no checkpoint will be saved.
+        data_dir: Path, path to the data directory.
+        seed: int, random seed for reproducibility.
+        batch_size: PositiveInt, batch size for training/testing.
+        num_workers: int, number of workers for data loading.
+        mode: Literal["test", "train"], mode of stage.
         img_features_keys: List[str], list of keys for image features.
+        ewc_model: Optional[Path], path to the EWC model checkpoint.
+        ewc_lambda: float, regularization strength for EWC.
+        tb_log_dir: Path, directory for TensorBoard logs.
+        device: str, device to use for computation (e.g., "cpu", "cuda:0").
     """
 
     root_dir: Path = Path("logs")
@@ -65,6 +77,12 @@ class TestConfig(BaseModel):
 
 
 class KeyConditionConfig(BaseModel):
+    """Configuration for specifying stopping criteria based on keys.
+    Args:
+        necessary: Set[str], set of keys that are necessary conditions for stopping.
+        sufficient: Set[str], set of keys that are sufficient conditions for stopping.
+    """
+
     necessary: Set[str] = set()
     sufficient: Set[str] = set()
 
@@ -73,10 +91,30 @@ class KeyConditionConfig(BaseModel):
         return self.necessary | self.sufficient
 
 
+class SnapshotConfig(BaseModel):
+    """Configuration for snapshot saving."""
+
+    unit: Literal["epoch", "step", "sample", "minute"] = "minute"
+    interval: PositiveInt = 1
+    maximum: NonNegativeInt = 0
+
+
 class TrainIterationConfig(BaseModel):
-    """Configuration for controlling training process.
+    """Configuration for training iteration.
     Args:
-        iter_mode: Literal["epoch", "step", "sample"], mode of iteration control.
+        iter_mode: Literal["epoch", "step", "sample"], mode of iteration.
+        iter_max: NonNegativeInt, maximum number of iterations (0 for no limit).
+        iter_min: NonNegativeInt, minimum number of iterations (0 for no limit).
+        patience: NonNegativeInt, number of iterations with no improvement to wait before stopping (0
+            for no limit).
+        max_train_loss: NonNegativeFloat, maximum training loss to continue training (0.0 for no limit).
+        min_train_loss: NonNegativeFloat, minimum training loss to continue training (0.0 for no limit).
+        max_val_loss: NonNegativeFloat, maximum validation loss to continue training (0.0 for no limit).
+        min_val_loss: NonNegativeFloat, minimum validation loss to continue training (0.0 for no limit).
+        max_time: NonNegativeFloat, maximum training time in minutes (0.0 for no limit).
+        conditions: KeyConditionConfig, conditions for stopping criteria.
+    Raises:
+        ValueError: If invalid keys are provided in conditions.
     """
 
     iter_mode: Literal["epoch", "step", "sample"] = "epoch"
@@ -95,7 +133,7 @@ class TrainIterationConfig(BaseModel):
         if self.conditions.keys:
             invalid_keys = self.conditions.keys - valid_keys
             if invalid_keys:
-                raise ValueError(f"Invalid priority keys: {invalid_keys}")
+                raise ValueError(f"Invalid condition keys: {invalid_keys}")
             min_in_suffi = self.conditions.sufficient & self.get_valid_keys("min")
             if min_in_suffi:
                 raise ValueError(
@@ -121,8 +159,6 @@ class TrainIterationConfig(BaseModel):
 class TrainConfig(BaseModel):
     """Configuration for training.
     Args:
-        max_epochs: PositiveInt, maximum number of training epochs (>=1).
-        batch_size: PositiveInt, batch size for training (>=1).
     """
 
     task_id: PositiveInt = 1
@@ -132,6 +168,7 @@ class TrainConfig(BaseModel):
     ewc_regularization: bool = False
     loss_fn: Any = "MSELoss"
     iteration: TrainIterationConfig = Field(default_factory=TrainIterationConfig)
+    snapshot: Dict[str, SnapshotConfig] = {}
 
 
 class ModelConfig(BaseModel):
@@ -156,5 +193,11 @@ class Config(CommonConfig):
     """
 
     model: ModelConfig = ModelConfig()
-    train: TrainConfig = TrainConfig()
+    train: TrainConfig = TrainConfig(
+        iteration=TrainIterationConfig(max_time=30),
+        snapshot={
+            "train_loss": SnapshotConfig(interval=10),
+            # "val_loss_min": SnapshotConfig(interval=20),
+        },
+    )
     test: TestConfig = TestConfig()

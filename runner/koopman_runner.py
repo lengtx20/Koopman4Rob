@@ -295,7 +295,13 @@ class KoopmanRunner:
         self.writer = SummaryWriter(log_dir=self.tb_log_dir)
         print(f"[INFO] TensorBoard logs will be saved to {self.tb_log_dir}")
 
-        epoch_bar = tqdm(range(train_cfg.max_epochs), desc="[Training]", position=0)
+        if train_cfg.iteration.iter_mode == "epoch":
+            max_epochs = train_cfg.iteration.iter_max
+        else:
+            raise NotImplementedError(
+                f"Only 'epoch' iteration mode is implemented, got {train_cfg.iteration.iter_mode}"
+            )
+        epoch_bar = tqdm(range(max_epochs), desc="[Training]", position=0)
         start_time = time.monotonic()
         for epoch in epoch_bar:
             # ----- training step -----
@@ -369,8 +375,28 @@ class KoopmanRunner:
             epoch_bar.set_postfix(postfix)
 
         total_time = (time.monotonic() - start_time) / 60.0  # in minutes
-        total_time_per_epoch = total_time / train_cfg.max_epochs
+        total_time_per_epoch = total_time / max_epochs
+
+        def get_model_size(model: torch.nn.Module, unit="MB"):
+            param_size = 0
+            for param in model.parameters():
+                param_size += param.nelement() * param.element_size()
+            buffer_size = 0
+            for buffer in model.buffers():
+                buffer_size += buffer.nelement() * buffer.element_size()
+
+            size_bytes = param_size + buffer_size
+            if unit == "KB":
+                return size_bytes / 1024
+            elif unit == "MB":
+                return size_bytes / (1024**2)
+            elif unit == "GB":
+                return size_bytes / (1024**3)
+            else:
+                return size_bytes
+
         metrics = {
+            "model_size": get_model_size(self.model),
             "total_time_minutes": total_time,
             "total_time_minutes_per_epoch": total_time_per_epoch,
             "total_time_minutes_per_epoch_no_batch": total_time_per_epoch
