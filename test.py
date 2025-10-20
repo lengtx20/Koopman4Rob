@@ -1,4 +1,6 @@
-from pathlib import Path
+from collections import Counter
 
-if Path(""):
-    print("Path works")
+
+cnt = Counter()
+cnt[0] += 1
+print(cnt)

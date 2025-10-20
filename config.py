@@ -5,7 +5,7 @@ from pydantic import (
     NonNegativeFloat,
     Field,
 )
-from typing import List, Optional, Literal, Any, Set, Dict
+from typing import List, Optional, Literal, Any, Set
 from functools import cache
 from pathlib import Path
 
@@ -94,6 +94,7 @@ class KeyConditionConfig(BaseModel):
 class SnapshotConfig(BaseModel):
     """Configuration for snapshot saving."""
 
+    keys: Set[str] = set()
     unit: Literal["epoch", "step", "sample", "minute"] = "minute"
     interval: PositiveInt = 1
     maximum: NonNegativeInt = 0
@@ -179,6 +180,14 @@ class TrainIterationConfig(BaseModel):
 class TrainConfig(BaseModel):
     """Configuration for training.
     Args:
+        task_id: PositiveInt, identifier for the training task.
+        fisher_path: Optional[Path], path to save/load Fisher information matrix for EWC.
+        threshold_mode: Optional[Literal["neural_ratio", "ewc_loss"]], mode for EWC thresholding.
+        ewc_threshold: float, threshold value for EWC regularization.
+        ewc_regularization: bool, whether to apply EWC regularization during training.
+        loss_fn: Any, loss function to use during training.
+        iteration: TrainIterationConfig, configuration for training iteration.
+        snapshot: List[SnapshotConfig], list of snapshot configurations.
     """
 
     task_id: PositiveInt = 1
@@ -188,7 +197,7 @@ class TrainConfig(BaseModel):
     ewc_regularization: bool = False
     loss_fn: Any = "MSELoss"
     iteration: TrainIterationConfig = Field(default_factory=TrainIterationConfig)
-    snapshot: Dict[str, SnapshotConfig] = {}
+    snapshot: List[SnapshotConfig] = []
 
 
 class ModelConfig(BaseModel):
@@ -214,10 +223,19 @@ class Config(CommonConfig):
 
     model: ModelConfig = ModelConfig()
     train: TrainConfig = TrainConfig(
-        iteration=TrainIterationConfig(max_time=20, patience=250),
-        snapshot={
-            "train_loss": SnapshotConfig(interval=10),
-            # "val_loss_min": SnapshotConfig(interval=20),
-        },
+        iteration=TrainIterationConfig(
+            max_time=20,
+            patience=250,
+            max_epoch=500,
+            min_val_loss=0.00045,
+            # ensure at least 20 minutes training
+            min_time=20,
+        ),
+        snapshot=[
+            SnapshotConfig(
+                keys={"train_loss", "val_loss", "min_train_loss", "min_val_loss"},
+                interval=1,
+            ),
+        ],
     )
     test: TestConfig = TestConfig()

@@ -130,6 +130,12 @@ class Blip2ImageFeatureExtractor:
         self.get_logger().info(f"Model dtype: {model.dtype}")
         self.get_logger().info(f"Model device: {model.device}")
         self.model = model
+
+        # total_params = sum(p.numel() for p in model.parameters())
+        # trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        # print(f"Total parameters: {total_params:,}")
+        # print(f"Trainable parameters: {trainable_params:,}")
+
         self.get_logger().info("Loading processor...")
         processor: AutoProcessor = AutoProcessor.from_pretrained(
             self.model_path, use_fast=True

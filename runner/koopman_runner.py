@@ -13,6 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
 from config import Config
 from pprint import pprint
+from collections import defaultdict, Counter
 
 
 class KoopmanDataset(Dataset):
@@ -299,7 +300,7 @@ class KoopmanRunner:
         manager = IterationManager(config.train.iteration)
 
         def iter_loader(stage: str):
-            start_time = time.monotonic()
+            start_time_ = time.monotonic()
             sample_num = 0
             total_loss = 0
             loader = {"train": self.train_loader, "val": self.val_loader}[stage]
@@ -346,14 +347,18 @@ class KoopmanRunner:
                 if not manager.reasons:
                     manager.update_train_epoch(avg_loss)
             else:
-                manager.update_val_epoch(avg_loss, time.monotonic() - start_time)
+                manager.update_val_epoch(avg_loss, time.monotonic() - start_time_)
                 no_grad.__exit__(None, None, None)
             return avg_loss
 
-        max_epochs = 5000
-        epoch_bar = tqdm(range(max_epochs), desc="[Training]", position=0)
+        epoch_bar = tqdm(
+            range(config.train.iteration.max_epoch), desc="[Training]", position=0
+        )
         start_time = time.monotonic()
-        stop_reasons = []
+        snapshots = defaultdict(list)
+        manager.start()
+        snap_count = Counter()
+        print(f"[Runner] Training started: {start_time}...")
         try:
             for epoch_i, epoch in enumerate(epoch_bar):
                 train_loss = iter_loader("train")
@@ -384,13 +389,23 @@ class KoopmanRunner:
                             f"RMSE: {np.sqrt(val_loss) / np.pi * 180:.3f} deg"
                         )
                 epoch_bar.set_postfix(postfix)
+                for index, snap_cfg in enumerate(train_cfg.snapshot):
+                    assert snap_cfg.unit == "minute", (
+                        "Only 'minute' unit is supported now."
+                    )
+                    cost = manager.get_time_cost()
+                    threshold = snap_cfg.interval * (snap_count[index] + 1)
+                    if cost > threshold:
+                        # print(f"{cost=} > {threshold=}, taking snapshot...")
+                        for snap_key in snap_cfg.keys:
+                            snapshots[snap_key].append(manager.records[snap_key])
+                        snap_count[index] += 1
                 if manager.reasons:
-                    stop_reasons = manager.reasons
                     break
-        except KeyboardInterrupt as e:
-            stop_reasons.append("keyboard_interrupt")
+        except KeyboardInterrupt:
+            manager.reasons.add("KeyboardInterrupt")
 
-        print(f"{stop_reasons=}")
+        print(f"Stop reasons: {manager.reasons}")
 
         total_time = (time.monotonic() - start_time) / 60.0  # in minutes
         total_time_per_epoch = total_time / (epoch_i + 1)
@@ -419,7 +434,14 @@ class KoopmanRunner:
             "total_time_minutes_per_epoch": total_time_per_epoch,
             "total_time_minutes_per_epoch_no_batch": total_time_per_epoch
             * config.batch_size,
-            "stop_reasons": stop_reasons,
+            "iteration": manager.records,
+            "snapshots": {
+                "period": {
+                    str(cfg.keys): f"{cfg.interval} {cfg.unit}"
+                    for cfg in train_cfg.snapshot
+                },
+                "values": dict(snapshots),
+            },
         }
 
         self.writer.close()
