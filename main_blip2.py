@@ -55,8 +55,8 @@ def run(config: Config):
                     break
                 idx += 1
         model_dir.mkdir(parents=True, exist_ok=True)
+        config.checkpoint_path = model_dir
         runner.train(config)
-        print(f"[INFO] Model saved to {model_dir}")
     elif mode == "test":
         runner.test("train", config)
     else:

@@ -353,37 +353,44 @@ class KoopmanRunner:
         max_epochs = 5000
         epoch_bar = tqdm(range(max_epochs), desc="[Training]", position=0)
         start_time = time.monotonic()
-        for epoch_i, epoch in enumerate(epoch_bar):
-            train_loss = iter_loader("train")
-            train_reasons = manager.reasons
-            val_loss = iter_loader("val")
-            val_reasons = manager.reasons
-            if val_reasons != train_reasons:
-                print(f"validation also: {train_reasons=}, {val_reasons=}")
+        stop_reasons = []
+        try:
+            for epoch_i, epoch in enumerate(epoch_bar):
+                train_loss = iter_loader("train")
+                train_reasons = manager.reasons
+                val_loss = iter_loader("val")
+                val_reasons = manager.reasons
+                if val_reasons != train_reasons:
+                    print(f"validation also: {train_reasons=}, {val_reasons=}")
 
-            self.losses.append(train_loss)
-            self.vales.append(val_loss)
+                self.losses.append(train_loss)
+                self.vales.append(val_loss)
 
-            # ----- TensorBoard -----
-            self.writer.add_scalar("Loss/Train", train_loss, epoch)
-            if val_loss is not None:
-                self.writer.add_scalar("Loss/Val", val_loss, epoch)
-            for i, param_group in enumerate(self.optimizer.param_groups):
-                self.writer.add_scalar(f"LR/Group{i}", param_group["lr"], epoch)
+                # ----- TensorBoard -----
+                self.writer.add_scalar("Loss/Train", train_loss, epoch)
+                if val_loss is not None:
+                    self.writer.add_scalar("Loss/Val", val_loss, epoch)
+                for i, param_group in enumerate(self.optimizer.param_groups):
+                    self.writer.add_scalar(f"LR/Group{i}", param_group["lr"], epoch)
 
-            # ----- tqdm postfix -----
-            postfix = {"TrainLoss": f"{train_loss:.4f}"}
-            if val_loss is not None:
-                postfix["ValLoss"] = f"{val_loss:.4f}"
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    tqdm.write(
-                        f"[INFO] Epoch {epoch + 1}: Validation loss improved to {val_loss:.4f} rad, "
-                        f"RMSE: {np.sqrt(val_loss) / np.pi * 180:.4f} deg"
-                    )
-            epoch_bar.set_postfix(postfix)
-            if manager.reasons:
-                break
+                # ----- tqdm postfix -----
+                postfix = {"TrainLoss": f"{train_loss:.4f}"}
+                if val_loss is not None:
+                    postfix["ValLoss"] = f"{val_loss:.4f}"
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        tqdm.write(
+                            f"[INFO] Epoch {epoch + 1}: Validation loss improved to {val_loss:.5f} rad, "
+                            f"RMSE: {np.sqrt(val_loss) / np.pi * 180:.3f} deg"
+                        )
+                epoch_bar.set_postfix(postfix)
+                if manager.reasons:
+                    stop_reasons = manager.reasons
+                    break
+        except KeyboardInterrupt as e:
+            stop_reasons.append("keyboard_interrupt")
+
+        print(f"{stop_reasons=}")
 
         total_time = (time.monotonic() - start_time) / 60.0  # in minutes
         total_time_per_epoch = total_time / (epoch_i + 1)
@@ -407,11 +414,12 @@ class KoopmanRunner:
                 return size_bytes
 
         metrics = {
-            "model_size": get_model_size(self.model),
+            "model_size_mb": get_model_size(self.model),
             "total_time_minutes": total_time,
             "total_time_minutes_per_epoch": total_time_per_epoch,
             "total_time_minutes_per_epoch_no_batch": total_time_per_epoch
             * config.batch_size,
+            "stop_reasons": stop_reasons,
         }
 
         self.writer.close()
