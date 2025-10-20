@@ -8,6 +8,7 @@ import json
 import time
 from tqdm import tqdm
 from utils.utils import smooth_curve
+from utils.iter_manager import IterationManager
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
 from config import Config
@@ -295,63 +296,70 @@ class KoopmanRunner:
         self.writer = SummaryWriter(log_dir=self.tb_log_dir)
         print(f"[INFO] TensorBoard logs will be saved to {self.tb_log_dir}")
 
-        if train_cfg.iteration.iter_mode == "epoch":
-            max_epochs = train_cfg.iteration.iter_max
-        else:
-            raise NotImplementedError(
-                f"Only 'epoch' iteration mode is implemented, got {train_cfg.iteration.iter_mode}"
-            )
-        epoch_bar = tqdm(range(max_epochs), desc="[Training]", position=0)
-        start_time = time.monotonic()
-        for epoch in epoch_bar:
-            # ----- training step -----
-            total_loss = 0
-            self.model.train()
+        manager = IterationManager(config.train.iteration)
+
+        def iter_loader(stage: str):
+            start_time = time.monotonic()
             sample_num = 0
-            for batch in self.train_loader:
-                if isinstance(batch, torch.Tensor):
-                    batch = batch.to(self.device)
+            total_loss = 0
+            loader = {"train": self.train_loader, "val": self.val_loader}[stage]
+            if loader is None:
+                return None
+            batch: torch.Tensor
+
+            if stage == "train":
+                self.model.train()
+            else:
+                self.model.eval()
+                no_grad = torch.no_grad()
+                no_grad.__enter__()
+            for batch in loader:
+                if stage == "train":
+                    self.optimizer.zero_grad()
+
+                batch = batch.to(self.device)
                 x_t = batch[:, : self.state_dim]
                 a_t = batch[:, self.state_dim : self.state_dim + self.action_dim]
                 x_t1 = batch[:, -self.state_dim :]
 
-                self.optimizer.zero_grad()
                 pred_x_t1 = self.model(x_t, a_t, False)
                 loss = self.loss_fn(pred_x_t1, x_t1)
 
-                if train_cfg.ewc_regularization:
-                    if self.ewc_model is not None and self.ewc_model.fisher is not None:
+                if stage == "train":
+                    if (
+                        train_cfg.ewc_regularization
+                        and self.ewc_model is not None
+                        and self.ewc_model.fisher is not None
+                    ):
                         loss += self.ewc_lambda * self.ewc_model.penalty(self.model)
+                    loss.backward()
 
-                loss.backward()
-                self.optimizer.step()
                 total_loss += loss.item() * batch.size(0)
                 sample_num += batch.size(0)
 
-            train_loss = total_loss / sample_num
-
-            # ----- validation step -----
-            if self.val_loader is None:
-                val_loss = None
+                if stage == "train":
+                    self.optimizer.step()
+                    if manager.update_train_iter(batch.size(0)):
+                        break
+            avg_loss = total_loss / sample_num
+            if stage == "train":
+                if not manager.reasons:
+                    manager.update_train_epoch(avg_loss)
             else:
-                self.model.eval()
-                val_loss = 0
-                sample_num = 0
-                with torch.no_grad():
-                    for batch in self.val_loader:
-                        batch = batch.to(self.device)
-                        x_t = batch[:, : self.state_dim]
-                        a_t = batch[
-                            :, self.state_dim : self.state_dim + self.action_dim
-                        ]
-                        x_t1 = batch[:, -self.state_dim :]
+                manager.update_val_epoch(avg_loss, time.monotonic() - start_time)
+                no_grad.__exit__(None, None, None)
+            return avg_loss
 
-                        pred_x_t1 = self.model(x_t, a_t, False)
-                        loss = self.loss_fn(pred_x_t1, x_t1)
-                        val_loss += loss.item() * batch.size(0)
-                        sample_num += batch.size(0)
-
-                val_loss /= sample_num
+        max_epochs = 5000
+        epoch_bar = tqdm(range(max_epochs), desc="[Training]", position=0)
+        start_time = time.monotonic()
+        for epoch_i, epoch in enumerate(epoch_bar):
+            train_loss = iter_loader("train")
+            train_reasons = manager.reasons
+            val_loss = iter_loader("val")
+            val_reasons = manager.reasons
+            if val_reasons != train_reasons:
+                print(f"validation also: {train_reasons=}, {val_reasons=}")
 
             self.losses.append(train_loss)
             self.vales.append(val_loss)
@@ -370,12 +378,15 @@ class KoopmanRunner:
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     tqdm.write(
-                        f"[INFO] Epoch {epoch + 1}: Validation loss improved to {val_loss:.4f}"
+                        f"[INFO] Epoch {epoch + 1}: Validation loss improved to {val_loss:.4f} rad, "
+                        f"RMSE: {np.sqrt(val_loss) / np.pi * 180:.4f} deg"
                     )
             epoch_bar.set_postfix(postfix)
+            if manager.reasons:
+                break
 
         total_time = (time.monotonic() - start_time) / 60.0  # in minutes
-        total_time_per_epoch = total_time / max_epochs
+        total_time_per_epoch = total_time / (epoch_i + 1)
 
         def get_model_size(model: torch.nn.Module, unit="MB"):
             param_size = 0

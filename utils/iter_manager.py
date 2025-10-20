@@ -11,56 +11,81 @@ class IterationManager:
         self.flags = {}
         self.flag_stamps = {}
         self.iter_counts = Counter()
-        self.min_losses = np.array([np.inf, np.inf])
-        self.start_time = time.monotonic()
+        self.min_losses = {"train": np.inf, "val": np.inf}
         self.reasons = set()
+        self._val_time_cost = 0.0
+        self.start()
 
-    def update(
-        self, train_loss: float, val_loss: float, batch_size: int = 0
-    ) -> Set[str]:
-        config = self._config
-        iter_counts = self.iter_counts
-        delta = {"step": 1, "sample": batch_size}
-        iter_mode = config.iter_mode
-        if batch_size:
-            if iter_mode != "epoch":
-                iter_counts[iter_mode] += delta[iter_mode]
-            else:
-                return set()
-        else:
-            iter_counts["epoch"] += 1
-        flags = self.flags
-        time_cost = time.monotonic() - self.start_time
-        cnt = iter_counts[config.iter_mode]
-        flags["iter_max"] = cnt >= config.iter_max > 0
-        flags["iter_min"] = cnt >= config.iter_min > 0
-        losses = np.array([train_loss, val_loss])
-        iter_counts["patience"] = (
-            0 if np.any(losses < self.min_losses) else (flags.get("patience", 0) + 1)
-        )
-        flags["patience"] = iter_counts["patience"] >= config.patience > 0
-        flags["max_train_loss"] = train_loss >= config.max_train_loss > 0.0
-        flags["min_train_loss"] = train_loss <= config.min_train_loss > 0.0
-        flags["max_val_loss"] = val_loss >= config.max_val_loss > 0.0
-        flags["min_val_loss"] = val_loss <= config.min_val_loss > 0.0
-        flags["max_time"] = time_cost >= config.max_time > 0.0
-        self.min_losses = np.minimum(losses, self.min_losses)
+    def start(self):
+        self.start_time = time.monotonic()
 
-        for key, flag in flags.items():
+    def _update_flag_time(self, time_cost: float = 0.0):
+        time_cost = self._get_time_cost() if time_cost == 0.0 else time_cost
+        for key, flag in self.flags.items():
             if flag and (key not in self.flag_stamps):
-                self.flag_stamps[key] = time_cost / 60.0
+                self.flag_stamps[key] = time_cost
 
-        # Check stopping criteria
-        conds = config.conditions
+    def _check_reasons(self, time_cost: float = 0.0) -> Set[str]:
+        self._update_flag_time(time_cost)
+        conds = self._config.conditions
         for key in conds.sufficient:
-            if flags[key]:
+            if self.flags.get(key, False):
                 self.reasons = {key}
                 break
         else:
             for key in conds.necessary:
-                if not flags[key]:
+                if not self.flags.get(key, False):
                     break
             else:
                 self.reasons = conds.necessary
-
         return self.reasons
+
+    def _update_loss_flags(self, stage: str, loss: float):
+        flags = self.flags
+        new_min = loss < self.min_losses[stage]
+        if new_min:
+            min_loss_key = f"min_{stage}_loss"
+            self.iter_counts["patience"] = 0
+            self.min_losses[stage] = loss
+            flags[min_loss_key] = loss <= getattr(self._config, min_loss_key) > 0.0
+        else:
+            self.iter_counts["patience"] += 1
+            # print(f"Patience counter: {self.iter_counts['patience']}")
+            # print(f"epoch {self.iter_counts['epoch']}")
+            flags["patience"] = (
+                self.iter_counts["patience"] >= self._config.patience > 0
+            )
+            max_loss_key = f"max_{stage}_loss"
+            flags[max_loss_key] = loss >= getattr(self._config, max_loss_key) > 0.0
+
+    def _get_time_cost(self) -> float:
+        return (time.monotonic() - self.start_time - self._val_time_cost) / 60.0
+
+    def _update_cnt_flags(self, keys: list[str]):
+        for key in keys:
+            cnt = self.iter_counts[key]
+            self.flags[f"max_{key}"] = cnt >= getattr(self._config, f"max_{key}") > 0
+            self.flags[f"min_{key}"] = cnt >= getattr(self._config, f"min_{key}") > 0
+
+    def _update_iter_flags(self):
+        self._update_cnt_flags(["step", "sample"])
+        time_cost = self._get_time_cost()
+        self.flags["max_time"] = time_cost >= self._config.max_time > 0.0
+        self.flags["min_time"] = time_cost >= self._config.min_time > 0.0
+        return time_cost
+
+    def update_train_iter(self, batch_size: int) -> Set[str]:
+        for key, delta in {"step": 1, "sample": batch_size}.items():
+            self.iter_counts[key] += delta
+        return self._check_reasons(self._update_iter_flags())
+
+    def update_train_epoch(self, train_loss: float) -> Set[str]:
+        self.iter_counts["epoch"] += 1
+        self._update_loss_flags("train", train_loss)
+        self._update_cnt_flags(["epoch"])
+        return self._check_reasons()
+
+    def update_val_epoch(self, val_loss: float, time_cost_sec: float = 0.0) -> Set[str]:
+        self._val_time_cost += time_cost_sec
+        self._update_loss_flags("val", val_loss)
+        return self._check_reasons()

@@ -6,7 +6,7 @@ from pydantic import (
     Field,
 )
 from typing import List, Optional, Literal, Any, Set, Dict
-from functools import cache, cached_property
+from functools import cache
 from pathlib import Path
 
 
@@ -35,14 +35,14 @@ class CommonConfig(BaseModel):
         device: str, device to use for computation (e.g., "cpu", "cuda:0").
     """
 
+    mode: Literal["train", "test"]
+    data_dir: Path
     root_dir: Path = Path("logs")
     checkpoints_dir: Path = Path("checkpoints")
     checkpoint_path: Optional[Path] = Path("0")
-    data_dir: Path
     seed: int = 42
     batch_size: PositiveInt = 64
     num_workers: int = 0
-    mode: Literal["test", "train"] = "test"
     img_features_keys: List[str] = [f"{cam}/{feature_suffix}" for cam in cam_keys]
     ewc_model: Optional[Path] = None
     ewc_lambda: float = 100.0
@@ -55,7 +55,7 @@ class CommonConfig(BaseModel):
         ) -> Optional[Path]:
             if path is None:
                 return None
-            return path if path.is_absolute() else relative_to / path
+            return path if (path.is_absolute() or path.exists()) else relative_to / path
 
         self.checkpoints_dir = process_path(self.checkpoints_dir)
         self.checkpoint_path = process_path(self.checkpoint_path, self.checkpoints_dir)
@@ -86,7 +86,7 @@ class KeyConditionConfig(BaseModel):
     necessary: Set[str] = set()
     sufficient: Set[str] = set()
 
-    @cached_property
+    @property
     def keys(self) -> Set[str]:
         return self.necessary | self.sufficient
 
@@ -101,31 +101,51 @@ class SnapshotConfig(BaseModel):
 
 class TrainIterationConfig(BaseModel):
     """Configuration for training iteration.
+
+    This class defines various stopping and continuation criteria for a training loop.
+    Any criterion set to its default "no limit" value (typically 0 or 0.0) is effectively disabled.
+    Training will stop when any of the sufficient conditions are met or all necessary conditions are satisfied.
+
     Args:
-        iter_mode: Literal["epoch", "step", "sample"], mode of iteration.
-        iter_max: NonNegativeInt, maximum number of iterations (0 for no limit).
-        iter_min: NonNegativeInt, minimum number of iterations (0 for no limit).
-        patience: NonNegativeInt, number of iterations with no improvement to wait before stopping (0
-            for no limit).
-        max_train_loss: NonNegativeFloat, maximum training loss to continue training (0.0 for no limit).
-        min_train_loss: NonNegativeFloat, minimum training loss to continue training (0.0 for no limit).
-        max_val_loss: NonNegativeFloat, maximum validation loss to continue training (0.0 for no limit).
-        min_val_loss: NonNegativeFloat, minimum validation loss to continue training (0.0 for no limit).
-        max_time: NonNegativeFloat, maximum training time in minutes (0.0 for no limit).
-        conditions: KeyConditionConfig, conditions for stopping criteria.
+        patience (NonNegativeInt): Number of consecutive epochs with no improvement in the monitored
+            metric before early stopping is triggered. Set to 0 to disable early stopping.
+        max_epoch (NonNegativeInt): Maximum number of epochs allowed for training.
+        min_epoch (NonNegativeInt): Minimum number of epochs that must be completed before any stopping
+            condition (e.g., patience or loss thresholds) is evaluated.
+        max_step (NonNegativeInt): Maximum number of training steps (batches processed) allowed.
+        min_step (NonNegativeInt): Minimum number of training steps that must be completed before stopping
+            conditions are evaluated.
+        max_sample (NonNegativeInt): Maximum number of training samples processed (across all epochs).
+        min_sample (NonNegativeInt): Minimum number of training samples that must be processed before stopping
+            conditions are evaluated.
+        max_time (NonNegativeFloat): Maximum wall-clock training time in minutes. Training stops once exceeded.
+            Set to 0.0 for no time limit.
+        min_time (NonNegativeFloat): Minimum training time in minutes that must elapse before any stopping
+            condition is considered.
+        max_train_loss (NonNegativeFloat): Upper bound on training loss; training stops if loss exceeds this value.
+        min_train_loss (NonNegativeFloat): Lower bound on training loss; training stops once loss drops below this value.
+        max_val_loss (NonNegativeFloat): Upper bound on validation loss; training stops if validation loss exceeds this value.
+        min_val_loss (NonNegativeFloat): Lower bound on validation loss; training stops once validation loss drops below this value.
+        conditions (KeyConditionConfig): Additional structured stopping conditions, typically mapping metric names
+            to comparison criteria (e.g., "val_acc >= 0.95"). Invalid or unsupported metric keys will raise a ValueError.
+
     Raises:
-        ValueError: If invalid keys are provided in conditions.
+        ValueError: If invalid keys are provided in the `conditions` configuration.
     """
 
-    iter_mode: Literal["epoch", "step", "sample"] = "epoch"
-    iter_max: NonNegativeInt = 0
-    iter_min: NonNegativeInt = 0
     patience: NonNegativeInt = 0
+    max_epoch: NonNegativeInt = 0
+    min_epoch: NonNegativeInt = 0
+    max_step: NonNegativeInt = 0
+    min_step: NonNegativeInt = 0
+    max_sample: NonNegativeInt = 0
+    min_sample: NonNegativeInt = 0
+    max_time: NonNegativeFloat = 0.0
+    min_time: NonNegativeFloat = 0.0
     max_train_loss: NonNegativeFloat = 0.0
     min_train_loss: NonNegativeFloat = 0.0
     max_val_loss: NonNegativeFloat = 0.0
     min_val_loss: NonNegativeFloat = 0.0
-    max_time: NonNegativeFloat = 0.0
     conditions: KeyConditionConfig = KeyConditionConfig()
 
     def model_post_init(self, context):
@@ -194,7 +214,7 @@ class Config(CommonConfig):
 
     model: ModelConfig = ModelConfig()
     train: TrainConfig = TrainConfig(
-        iteration=TrainIterationConfig(max_time=30),
+        iteration=TrainIterationConfig(max_time=20, patience=250),
         snapshot={
             "train_loss": SnapshotConfig(interval=10),
             # "val_loss_min": SnapshotConfig(interval=20),
