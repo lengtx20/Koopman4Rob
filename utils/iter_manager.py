@@ -14,6 +14,7 @@ class IterationManager:
         self.last_losses = {}
         self.reasons = set()
         self._val_time_cost = 0.0
+        self._is_loss_improved = {}
         self.start()
 
     def start(self):
@@ -48,11 +49,13 @@ class IterationManager:
         self.last_losses[stage] = loss
         new_min = loss < self.min_losses[stage]
         if new_min:
+            self._is_loss_improved[stage] = True
             min_loss_key = f"min_{stage}_loss"
             self._iter_counts["patience"] = 0
             self.min_losses[stage] = loss
             flags[min_loss_key] = loss <= getattr(self._config, min_loss_key) > 0.0
         else:
+            self._is_loss_improved[stage] = False
             self._iter_counts["patience"] += 1
             # print(f"Patience counter: {self.iter_counts['patience']}")
             # print(f"epoch {self.iter_counts['epoch']}")
@@ -105,6 +108,11 @@ class IterationManager:
         self._val_time_cost += time_cost_sec
         self._update_loss_flags("val", val_loss)
         return self._check_reasons()
+
+    def is_loss_improved(self, stage: str, ignore_first: bool = True) -> bool:
+        if ignore_first and self._iter_counts["epoch"] == 1:
+            return False
+        return self._is_loss_improved.get(stage, False)
 
     @property
     def records(self) -> Dict[str, Union[float, list]]:

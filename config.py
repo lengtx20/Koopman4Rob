@@ -12,6 +12,7 @@ from pathlib import Path
 
 cam_keys = ["/env_camera/color/image_raw"]
 feature_suffix = "features_proj"
+IterUnit = Literal["epoch", "step", "sample", "minute"]
 
 
 class CommonConfig(BaseModel):
@@ -99,13 +100,32 @@ class KeyConditionConfig(BaseModel):
         return self.necessary | self.sufficient
 
 
-class SnapshotConfig(BaseModel):
-    """Configuration for snapshot saving."""
+class IntermittentConfig(BaseModel):
+    """Configuration for interval-based operations.
+    Args:
+        unit (IterUnit): Unit of the interval.
+        interval (PositiveInt): Interval in the specified unit.
+        maximum (NonNegativeInt): Maximum number of times to perform the operation. If set to 0 (default), there is no limit.
+    """
 
-    keys: Set[str] = set()
-    unit: Literal["epoch", "step", "sample", "minute"] = "minute"
+    unit: IterUnit = "minute"
     interval: PositiveInt = 1
     maximum: NonNegativeInt = 0
+
+
+class SnapshotConfig(IntermittentConfig):
+    """Configuration for snapshot saving.
+
+    This class defines the configuration for saving snapshots during training.
+    Args:
+        keys (Set[str]): Set of metric keys to include in the snapshot.
+        unit (IterUnit): Unit of the interval for saving snapshots.
+        interval (PositiveInt): Interval for saving snapshots in the specified unit.
+        maximum (NonNegativeInt): Maximum number of snapshots to keep. If set to 0
+            (default), all snapshots are kept.
+    """
+
+    keys: Set[str] = set()
 
 
 class TrainIterationConfig(BaseModel):
@@ -189,6 +209,25 @@ class TrainIterationConfig(BaseModel):
         return keys
 
 
+class SaveModelConfig(BaseModel):
+    """Configuration for saving the model.
+    Args:
+    """
+
+    period: Optional[IntermittentConfig] = None
+    on_improve: List[str] = ["val_loss"]
+    maximum: List[NonNegativeInt] = [5]
+
+    def model_post_init(self, context):
+        improve_keys = {"train_loss", "val_loss"}
+        if not set(self.on_improve).issubset(improve_keys):
+            raise ValueError(
+                f"Invalid on_improve keys: {set(self.on_improve) - improve_keys}"
+            )
+        if not len(self.on_improve) == len(self.maximum):
+            raise ValueError("Length of on_improve and maximum must be the same")
+
+
 class TrainConfig(BaseModel):
     """Configuration for training.
     Args:
@@ -210,6 +249,7 @@ class TrainConfig(BaseModel):
     loss_fn: Any = "MSELoss"
     iteration: TrainIterationConfig = Field(default_factory=TrainIterationConfig)
     snapshot: List[SnapshotConfig] = []
+    save_model: SaveModelConfig = SaveModelConfig()
 
 
 class ModelConfig(BaseModel):

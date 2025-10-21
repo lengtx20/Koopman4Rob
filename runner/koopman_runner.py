@@ -9,6 +9,7 @@ import time
 from tqdm import tqdm
 from utils.utils import smooth_curve
 from utils.iter_manager import IterationManager
+from utils.fifo_save import FIFOSave
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
 from config import Config
@@ -283,13 +284,19 @@ class KoopmanRunner:
         """
         Called by 'train' mode.
         """
-        self.model.train()
+        ckpt_dir = config.checkpoint_path
+        save_model = ckpt_dir is not None
         best_val_loss = float("inf")
         train_cfg = config.train
         if train_cfg.threshold_mode is not None:
             self.fisher_dict = None
             self.load_fisher(fisher_path=train_cfg.fisher_path)
-
+        improve_dict: dict[str, FIFOSave] = {
+            key: FIFOSave(max_count)
+            for key, max_count in zip(
+                train_cfg.save_model.on_improve, train_cfg.save_model.maximum
+            )
+        }
         # tensorboard
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.tb_log_dir = self.tb_log_dir / f"{timestamp}"
@@ -348,6 +355,15 @@ class KoopmanRunner:
             else:
                 manager.update_val_epoch(avg_loss, time.monotonic() - start_time_)
                 no_grad.__exit__(None, None, None)
+            if save_model and manager.is_loss_improved(stage):
+                # print(f"[INFO] {stage} loss improved to {avg_loss:.5f}")
+                loss_key = f"{stage}_loss"
+                saved_fifo = improve_dict.get(loss_key, None)
+                if saved_fifo is not None:
+                    model_path = ckpt_dir / f"{loss_key}/{avg_loss:.5f}"
+                    saved_fifo.append(model_path)
+                    self.model.save(model_dir=model_path)
+                    print(f"[Runner] Model saved to {model_path}")
             return avg_loss
 
         epoch_bar = tqdm(
@@ -445,18 +461,17 @@ class KoopmanRunner:
 
         self.writer.close()
 
-        # ----- save models and losses & vales -----
-        save_model = config.checkpoint_path is not None
+        # ----- save the last models and losses & vales -----
         if save_model:
-            model_dir = config.checkpoint_path
-            model_dir.mkdir(parents=True, exist_ok=True)
-            self.model.save(model_dir=model_dir)
-            print(f"[Runner] Model saved to {model_dir}")
-            np.save(model_dir / "losses.npy", np.array(self.losses))
-            np.save(model_dir / "vales.npy", np.array(self.vales))
-            with open(model_dir / "training_metrics.json", "w") as f:
+            last_model_path = ckpt_dir / "last"
+            last_model_path.mkdir(parents=True, exist_ok=True)
+            self.model.save(model_dir=last_model_path)
+            print(f"[Runner] Last model saved to {last_model_path}")
+            np.save(ckpt_dir / "losses.npy", np.array(self.losses))
+            np.save(ckpt_dir / "vales.npy", np.array(self.vales))
+            with open(ckpt_dir / "training_metrics.json", "w") as f:
                 json.dump(metrics, f, indent=4)
-            print(f"[Runner] Losses, vales and metrics saved to {model_dir}")
+            print(f"[Runner] Losses, vales and metrics saved to {ckpt_dir}")
         else:
             print("[INFO] No Koopman model saved")
 
@@ -469,8 +484,8 @@ class KoopmanRunner:
             fisher = self.ewc_model.compute_fisher(train_tensor, batch_size=64)
             self.ewc_model.fisher = fisher
             print("[INFO] Fisher matrix updated.")
-            if save_model and model_dir is not None:
-                self.ewc_model.save(model_dir=model_dir, task_id=train_cfg.task_id)
+            if save_model and ckpt_dir is not None:
+                self.ewc_model.save(model_dir=ckpt_dir, task_id=train_cfg.task_id)
         else:
             print("[INFO] No EWC model attached or invalid.")
 
