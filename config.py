@@ -5,7 +5,7 @@ from pydantic import (
     NonNegativeFloat,
     Field,
 )
-from typing import List, Optional, Literal, Any, Set
+from typing import List, Optional, Literal, Any, Set, Dict
 from functools import cache
 from pathlib import Path
 
@@ -252,6 +252,16 @@ class TrainConfig(BaseModel):
     save_model: SaveModelConfig = SaveModelConfig()
 
 
+class InferConfig(BaseModel):
+    """Configuration for inference.
+    Args:
+        extra_model_path: Dict[str, Path], paths to extra models, e.g. vision backbones, for inference.
+    """
+
+    # TODO: use deriving structure for config
+    extra_models: Dict[str, Dict] = {}
+
+
 class ModelConfig(BaseModel):
     """Configuration for the model.
     Args:
@@ -271,17 +281,18 @@ class Config(CommonConfig):
         model: ModelConfig, configuration for the model.
         train: TrainConfig, configuration for training.
         test: TestConfig, configuration for testing.
+        infer: InferConfig, configuration for inference.
     """
 
     model: ModelConfig = ModelConfig()
     train: TrainConfig = TrainConfig(
         iteration=TrainIterationConfig(
-            max_train_time=1 / 6,
-            patience=2500,
-            max_epoch=5000000,
+            max_train_time=20,
+            patience=250,
+            max_epoch=5000,
             min_val_loss=0.00045,
             # ensure at least 20 minutes training
-            min_train_time=1 / 6,
+            min_train_time=20,
         ),
         snapshot=[
             SnapshotConfig(
@@ -291,6 +302,11 @@ class Config(CommonConfig):
         ],
     )
     test: TestConfig = TestConfig()
+    infer: InferConfig = InferConfig(
+        extra_models={
+            "blip2-itm-vit-g": {"path": Path("/home/ghz/blip2-itm-vit-g"), "prompt": ""}
+        }
+    )
 
     def model_post_init(self, context):
         super().model_post_init(context)
