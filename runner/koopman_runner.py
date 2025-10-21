@@ -378,9 +378,9 @@ class KoopmanRunner:
                     self.writer.add_scalar(f"LR/Group{i}", param_group["lr"], epoch)
 
                 # ----- tqdm postfix -----
-                postfix = {"TrainLoss": f"{train_loss:.4f}"}
+                postfix = {"TrainLoss": f"{train_loss:.5f}"}
                 if val_loss is not None:
-                    postfix["ValLoss"] = f"{val_loss:.4f}"
+                    postfix["ValLoss"] = f"{val_loss:.5f}"
                     if val_loss < best_val_loss:
                         best_val_loss = val_loss
                         tqdm.write(

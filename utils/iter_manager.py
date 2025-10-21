@@ -1,6 +1,6 @@
 from config import TrainIterationConfig
 from collections import Counter
-from typing import Set, Dict, Union
+from typing import Set, Dict, Union, Tuple
 import time
 
 
@@ -19,14 +19,17 @@ class IterationManager:
     def start(self):
         self.start_time = time.monotonic()
 
-    def _update_flag_time(self, time_cost: float = 0.0):
-        time_cost = self.get_time_cost() if time_cost == 0.0 else time_cost
+    def _update_flag_time(self, time_costs: Tuple[float, float] = (0.0, 0.0)):
+        time_cost = self.get_time_cost() if time_costs[0] == 0.0 else time_costs[0]
+        train_time_cost = (
+            self.get_train_time_cost() if time_costs[1] == 0.0 else time_costs[1]
+        )
         for key, flag in self._flags.items():
             if flag and (key not in self.flag_stamps):
-                self.flag_stamps[key] = time_cost
+                self.flag_stamps[key] = [time_cost, train_time_cost]
 
-    def _check_reasons(self, time_cost: float = 0.0) -> Set[str]:
-        self._update_flag_time(time_cost)
+    def _check_reasons(self, time_costs: Tuple[float, float] = (0.0, 0.0)) -> Set[str]:
+        self._update_flag_time(time_costs)
         conds = self._config.conditions
         for key in conds.sufficient:
             if self._flags.get(key, False):
@@ -60,6 +63,9 @@ class IterationManager:
             flags[max_loss_key] = loss >= getattr(self._config, max_loss_key) > 0.0
 
     def get_time_cost(self) -> float:
+        return (time.monotonic() - self.start_time) / 60.0
+
+    def get_train_time_cost(self) -> float:
         return (time.monotonic() - self.start_time - self._val_time_cost) / 60.0
 
     def _update_cnt_flags(self, keys: list[str]):
@@ -68,12 +74,21 @@ class IterationManager:
             self._flags[f"max_{key}"] = cnt >= getattr(self._config, f"max_{key}") > 0
             self._flags[f"min_{key}"] = cnt >= getattr(self._config, f"min_{key}") > 0
 
-    def _update_iter_flags(self):
+    def _update_iter_flags(self) -> Tuple[float, float]:
         self._update_cnt_flags(["step", "sample"])
-        time_cost = self.get_time_cost()
-        self._flags["max_time"] = time_cost >= self._config.max_time > 0.0
-        self._flags["min_time"] = time_cost >= self._config.min_time > 0.0
-        return time_cost
+        time_costs = []
+        for t_key in ["", "train_"]:
+            max_time_key = f"max_{t_key}time"
+            min_time_key = f"min_{t_key}time"
+            time_cost = getattr(self, f"get_{t_key}time_cost")()
+            self._flags[max_time_key] = (
+                time_cost >= getattr(self._config, max_time_key) > 0.0
+            )
+            self._flags[min_time_key] = (
+                time_cost >= getattr(self._config, min_time_key) > 0.0
+            )
+            time_costs.append(time_cost)
+        return time_costs
 
     def update_train_iter(self, batch_size: int) -> Set[str]:
         for key, delta in {"step": 1, "sample": batch_size}.items():

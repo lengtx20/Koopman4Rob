@@ -19,6 +19,7 @@ class CommonConfig(BaseModel):
     These configurations are applicable to both training and testing
     but the values are not necessarily the same in both cases.
     Args:
+        mode: Literal["test", "train"], mode of stage.
         root_dir: Path, root directory for saving logs and checkpoints.
         checkpoints_dir: Path, directory for saving model checkpoints.
         checkpoint_path: Optional[Path], path to a specific model checkpoint.
@@ -27,8 +28,10 @@ class CommonConfig(BaseModel):
         seed: int, random seed for reproducibility.
         batch_size: PositiveInt, batch size for training/testing.
         num_workers: int, number of workers for data loading.
-        mode: Literal["test", "train"], mode of stage.
+        robot_state_keys: List[str], list of keys for robot state.
+        robot_action_keys: List[str], list of keys for robot action.
         img_features_keys: List[str], list of keys for image features.
+        pair_gap: NonNegativeInt, gap between paired samples.
         ewc_model: Optional[Path], path to the EWC model checkpoint.
         ewc_lambda: float, regularization strength for EWC.
         tb_log_dir: Path, directory for TensorBoard logs.
@@ -124,10 +127,12 @@ class TrainIterationConfig(BaseModel):
         max_sample (NonNegativeInt): Maximum number of training samples processed (across all epochs).
         min_sample (NonNegativeInt): Minimum number of training samples that must be processed before stopping
             conditions are evaluated.
-        max_time (NonNegativeFloat): Maximum wall-clock training time in minutes. Training stops once exceeded.
+        max_time (NonNegativeFloat): Maximum wall-clock training and validation time in minutes. Training stops once exceeded.
             Set to 0.0 for no time limit.
-        min_time (NonNegativeFloat): Minimum training time in minutes that must elapse before any stopping
+        min_time (NonNegativeFloat): Minimum training and validation time in minutes that must elapse before any stopping
             condition is considered.
+        max_train_time (NonNegativeFloat): Maximum training time in minutes (excluding validation). Training stops once exceeded.
+        min_train_time (NonNegativeFloat): Minimum training time in minutes that must elapse before any stopping condition is considered.
         max_train_loss (NonNegativeFloat): Upper bound on training loss; training stops if loss exceeds this value.
         min_train_loss (NonNegativeFloat): Lower bound on training loss; training stops once loss drops below this value.
         max_val_loss (NonNegativeFloat): Upper bound on validation loss; training stops if validation loss exceeds this value.
@@ -148,6 +153,8 @@ class TrainIterationConfig(BaseModel):
     min_sample: NonNegativeInt = 0
     max_time: NonNegativeFloat = 0.0
     min_time: NonNegativeFloat = 0.0
+    max_train_time: NonNegativeFloat = 0.0
+    min_train_time: NonNegativeFloat = 0.0
     max_train_loss: NonNegativeFloat = 0.0
     min_train_loss: NonNegativeFloat = 0.0
     max_val_loss: NonNegativeFloat = 0.0
@@ -229,12 +236,12 @@ class Config(CommonConfig):
     model: ModelConfig = ModelConfig()
     train: TrainConfig = TrainConfig(
         iteration=TrainIterationConfig(
-            max_time=20,
-            patience=250,
-            max_epoch=500,
+            max_train_time=1 / 6,
+            patience=2500,
+            max_epoch=5000000,
             min_val_loss=0.00045,
             # ensure at least 20 minutes training
-            min_time=20,
+            min_train_time=1 / 6,
         ),
         snapshot=[
             SnapshotConfig(
