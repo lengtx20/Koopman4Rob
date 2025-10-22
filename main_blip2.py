@@ -50,9 +50,11 @@ def run(config: Config):
                 idx += 1
         model_dir.mkdir(parents=True, exist_ok=True)
         config.checkpoint_path = model_dir
-        runner.train(config)
+        runner.train()
     elif mode == "test":
-        runner.test("train", config)
+        runner.test("train")
+    elif mode == "infer":
+        runner.infer()
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
 

@@ -236,18 +236,28 @@ class Deep_Koopman(nn.Module):
         pass
 
     def save(self, model_dir):
-        torch.save(self.encoder.state_dict(), f"{model_dir}/encoder.pth")
-        torch.save(self.A.data, f"{model_dir}/A.pth")
-        torch.save(self.B.data, f"{model_dir}/B.pth")
+        torch.save(self.encoder.state_dict(), model_dir / "encoder.pth")
+        torch.save(self.A.data, model_dir / "A.pth")
+        torch.save(self.B.data, model_dir / "B.pth")
         if not self.iden_decoder:
-            torch.save(self.decoder.state_dict(), f"{model_dir}/decoder.pth")
+            torch.save(self.decoder.state_dict(), model_dir / "decoder.pth")
 
     def load(self, model_dir):
-        self.encoder.load_state_dict(torch.load(f"{model_dir}/encoder.pth"))
-        self.A.data = torch.load(f"{model_dir}/A.pth")
-        self.B.data = torch.load(f"{model_dir}/B.pth")
+        """Load weights while preserving the current device and dtype."""
+        param = next(self.parameters())
+        device = param.device
+        dtype = param.dtype
+
+        encoder_state = torch.load(model_dir / "encoder.pth", map_location=device)
+        self.encoder.load_state_dict(encoder_state)
+
+        with torch.no_grad():
+            self.A.copy_(torch.load(model_dir / "A.pth", map_location=device).to(dtype))
+            self.B.copy_(torch.load(model_dir / "B.pth", map_location=device).to(dtype))
+
         if not self.iden_decoder:
-            self.decoder.load_state_dict(torch.load(f"{model_dir}/decoder.pth"))
+            decoder_state = torch.load(model_dir / "decoder.pth", map_location=device)
+            self.decoder.load_state_dict(decoder_state)
 
     def __repr__(self):
         return (

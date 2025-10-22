@@ -10,7 +10,6 @@ from functools import cache
 from pathlib import Path
 
 
-cam_keys = ["/env_camera/color/image_raw"]
 feature_suffix = "features_proj"
 IterUnit = Literal["epoch", "step", "sample", "minute"]
 
@@ -39,8 +38,8 @@ class CommonConfig(BaseModel):
         device: str, device to use for computation (e.g., "cpu", "cuda:0").
     """
 
-    mode: Literal["train", "test"]
-    data_dir: Path
+    mode: Literal["train", "test", "infer"]
+    data_dir: Optional[Path] = None
     root_dir: Path = Path("logs")
     checkpoints_dir: Path = Path("checkpoints")
     checkpoint_path: Optional[Path] = Path("0")
@@ -52,7 +51,8 @@ class CommonConfig(BaseModel):
         "/follow/arm/joint_state/position",
         # "/follow/eef/joint_state/position",
     ]
-    img_features_keys: List[str] = [f"{cam}/{feature_suffix}" for cam in cam_keys]
+    image_keys: List[str] = ["/env_camera/color/image_raw"]
+    img_features_keys: List[str] = [f"{cam}/{feature_suffix}" for cam in image_keys]
     pair_gap: NonNegativeInt = 0
     ewc_model: Optional[Path] = None
     ewc_lambda: float = 100.0

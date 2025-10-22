@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader, Dataset
 from config import Config
 from pprint import pprint
 from collections import defaultdict, Counter
+from itertools import count
 
 
 class KoopmanDataset(Dataset):
@@ -60,6 +61,7 @@ class KoopmanRunner:
         self.ewc_lambda = config.ewc_lambda
         self.num_workers = config.num_workers
         self.tb_log_dir = config.tb_log_dir
+        self.config = config
 
         self.losses = []
         self.vales = []
@@ -78,7 +80,7 @@ class KoopmanRunner:
                 num_workers,
                 0.8 if mode == "train" else 1.0,
             )
-        else:
+        elif config.mode != "infer":
             self.train_loader = DataLoader(
                 KoopmanDataset(train_data),
                 batch_size=batch_size,
@@ -280,10 +282,11 @@ class KoopmanRunner:
         else:
             print("[Warning] No valid Fisher info for encoder.layers.6.bias")
 
-    def train(self, config: Config):
+    def train(self):
         """
         Called by 'train' mode.
         """
+        config = self.config
         ckpt_dir = config.checkpoint_path
         save_model = ckpt_dir is not None
         best_val_loss = float("inf")
@@ -489,11 +492,7 @@ class KoopmanRunner:
         else:
             print("[INFO] No EWC model attached or invalid.")
 
-    def test(
-        self,
-        dataset="val",
-        config: Config = None,
-    ):
+    def test(self, dataset="val"):
         """
         Test model on given dataset (train/val).
         Args:
@@ -501,6 +500,7 @@ class KoopmanRunner:
             config: Config, configuration object containing test settings
         """
         # ----- load model -----
+        config = self.config
         model_dir = config.checkpoint_path
         test_config = config.test
         rollout_steps = test_config.rollout_steps
@@ -580,6 +580,7 @@ class KoopmanRunner:
         self.traj_np = np.concatenate(traj, axis=0)
         print("[INFO] Trajectory shape:", self.traj_np.shape)
         pprint(metrics_dict)
+
         # ----- save the results -----
         if test_config.save_results:
             np.save(model_dir / f"{dataset}_traj.npy", self.traj_np)
@@ -630,3 +631,116 @@ class KoopmanRunner:
 
         plt.tight_layout()
         plt.show()
+
+    def infer(self):
+        from airbot_data_collection.basis import SystemMode
+        from airbot_data_collection.common.environments.grouped import (
+            GroupedEnvironment,
+            GroupedEnvironmentConfig,
+            GroupsSendActionConfig,
+        )
+        from airbot_data_collection.common.systems.grouped import (
+            SystemSensorComponentGroupsConfig,
+            AutoControlConfig,
+        )
+        from airbot_data_collection.common.devices.cameras.v4l2 import (
+            V4L2Camera,
+            V4L2CameraConfig,
+        )
+
+        # from airbot.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
+        from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+
+        env = GroupedEnvironment(
+            GroupedEnvironmentConfig(
+                components=SystemSensorComponentGroupsConfig(
+                    groups=["/"] * 2,
+                    names=["follow", "env_camera"],
+                    roles=["l", "o"],
+                    instances=[
+                        AIRBOTPlay(AIRBOTPlayConfig()),
+                        V4L2Camera(V4L2CameraConfig()),
+                    ],
+                ),
+                reset_action=GroupsSendActionConfig(
+                    groups=["/"],
+                    action_values=[[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],
+                    modes=[SystemMode.RESETTING],
+                ),
+                auto_control=AutoControlConfig(groups=[]),
+            )
+        )
+
+        if not env.configure():
+            raise RuntimeError("Failed to configure the grouped system.")
+
+        action = GroupsSendActionConfig(
+            groups=["/"],
+            action_values=[[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],
+            modes=[SystemMode.SAMPLING],
+        )
+        # ----- load model -----
+        self.model.load(model_dir=self.config.checkpoint_path)
+        self.model.eval()
+        model_dtype = next(self.model.parameters()).dtype
+
+        print("[INFO] Model loaded for inference.")
+
+        from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
+
+        blip2_cfg = self.config.infer.extra_models["blip2-itm-vit-g"]
+        extractor = Blip2ImageFeatureExtractor(model_path=blip2_cfg["path"])
+        extractor.load_model()
+        dt = 1 / 20.0  # 20 Hz
+        pred_x_t1: torch.Tensor
+        try:
+            for rollout in count():
+                env.reset()
+                if input(f"Press Enter to start {rollout=}...") == "q":
+                    break
+                try:
+                    for step in count():
+                        obs = env.output().observation
+
+                        x_t = (
+                            torch.tensor(
+                                sum(
+                                    [
+                                        obs[k.removesuffix("/position")]["data"][
+                                            "position"
+                                        ]
+                                        for k in self.config.robot_action_keys
+                                    ],
+                                    [],
+                                ),
+                                dtype=model_dtype,
+                            )
+                            .to(self.device)
+                            .unsqueeze(0)
+                        )
+
+                        print(obs.keys())
+                        features = {}
+                        for key in self.config.image_keys:
+                            features[key] = extractor.process_image(
+                                obs[key]["data"], blip2_cfg["prompt"]
+                            )["features_proj"]
+                        a_t = features[self.config.image_keys[0]]
+                        # print("a_t shape:", a_t.shape)
+                        # print("x_t shape:", x_t.shape)
+                        # assert x_t.shape[1] == self.model.state_dim
+                        # assert a_t.shape[1] == self.model.action_dim
+                        a_t = a_t.to(dtype=model_dtype)
+                        self.model.eval()
+                        with torch.no_grad():
+                            pred_x_t1 = self.model(x_t, a_t, False)
+                            action.action_values = [
+                                pred_x_t1.squeeze(0).cpu().numpy().tolist()
+                            ]
+                            env.input(action)
+                        time.sleep(dt)
+                except KeyboardInterrupt:
+                    print(f"Rollout interrupted by user at {step=}, resetting...")
+                    continue
+        except KeyboardInterrupt:
+            print("Inference session ended by user.")
