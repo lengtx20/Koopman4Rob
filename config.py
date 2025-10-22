@@ -304,7 +304,10 @@ class Config(CommonConfig):
     test: TestConfig = TestConfig()
     infer: InferConfig = InferConfig(
         extra_models={
-            "blip2-itm-vit-g": {"path": Path("/home/ghz/blip2-itm-vit-g"), "prompt": ""}
+            "blip2-itm-vit-g": {
+                "path": Path("pretrained_models/blip2-itm-vit-g"),
+                "prompt": "Open the drawer with the black handle",
+            }
         }
     )
 

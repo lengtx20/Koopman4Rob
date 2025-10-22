@@ -47,3 +47,4 @@ profile.*
 !.pixi/config.toml
 outputs/
 mcap_data/
+pretrained_models/

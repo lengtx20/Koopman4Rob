@@ -648,8 +648,8 @@ class KoopmanRunner:
             V4L2CameraConfig,
         )
 
-        # from airbot.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-        from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+        from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
+        # from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 
         env = GroupedEnvironment(
             GroupedEnvironmentConfig(
@@ -689,6 +689,11 @@ class KoopmanRunner:
         from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
 
         blip2_cfg = self.config.infer.extra_models["blip2-itm-vit-g"]
+        prompt = blip2_cfg["prompt"]
+        if not prompt:
+            raise ValueError("BLIP2 prompt is empty.")
+        if not blip2_cfg["path"].exists():
+            raise FileNotFoundError(f"BLIP2 model not found at {blip2_cfg['path']}")
         extractor = Blip2ImageFeatureExtractor(model_path=blip2_cfg["path"])
         extractor.load_model()
         dt = 1 / 20.0  # 20 Hz
@@ -718,7 +723,7 @@ class KoopmanRunner:
                         features = {}
                         for key in self.config.image_keys:
                             features[key] = extractor.process_image(
-                                obs[key]["data"], blip2_cfg["prompt"]
+                                obs[key]["data"], prompt
                             )["features_proj"]
                         a_t = features[self.config.image_keys[0]]
                         # print("a_t shape:", a_t.shape)
