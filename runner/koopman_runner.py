@@ -651,6 +651,20 @@ class KoopmanRunner:
         from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
         # from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 
+        reset_action = [
+            # -0.0085832,
+            # 0.18596932,
+            # -0.08869307,
+            # 0.08602273,
+            # -0.04520485,
+            # -0.09670405,
+            -0.08411535620689392,
+            -0.4709315598011017,
+            0.699816882610321,
+            -0.010872052982449532,
+            0.04901960864663124,
+            -0.03452353551983833,
+        ]
         env = GroupedEnvironment(
             GroupedEnvironmentConfig(
                 components=SystemSensorComponentGroupsConfig(
@@ -659,12 +673,14 @@ class KoopmanRunner:
                     roles=["l", "o"],
                     instances=[
                         AIRBOTPlay(AIRBOTPlayConfig()),
-                        V4L2Camera(V4L2CameraConfig()),
+                        V4L2Camera(
+                            V4L2CameraConfig(camera_index="usb-0000:64:00.3-1.3")
+                        ),
                     ],
                 ),
                 reset_action=GroupsSendActionConfig(
                     groups=["/"],
-                    action_values=[[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],
+                    action_values=[reset_action],
                     modes=[SystemMode.RESETTING],
                 ),
                 auto_control=AutoControlConfig(groups=[]),
@@ -676,7 +692,7 @@ class KoopmanRunner:
 
         action = GroupsSendActionConfig(
             groups=["/"],
-            action_values=[[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],
+            action_values=[[]],
             modes=[SystemMode.SAMPLING],
         )
         # ----- load model -----
@@ -697,48 +713,57 @@ class KoopmanRunner:
         extractor = Blip2ImageFeatureExtractor(model_path=blip2_cfg["path"])
         extractor.load_model()
         dt = 1 / 20.0  # 20 Hz
-        pred_x_t1: torch.Tensor
-        try:
-            for rollout in count():
-                env.reset()
-                if input(f"Press Enter to start {rollout=}...") == "q":
-                    break
-                try:
-                    for step in count():
-                        obs = env.output().observation
+        pred_x_t1 = torch.tensor(
+            reset_action, dtype=model_dtype, device=self.device
+        ).unsqueeze(0)
+        with torch.no_grad():
+            try:
+                for rollout in count():
+                    env.reset()
+                    if input(f"Press Enter to start {rollout=}...") == "q":
+                        break
+                    try:
+                        for step in count():
+                            obs = env.output().observation
 
-                        x_t = torch.tensor(
-                            sum(
-                                [
-                                    obs[k.removesuffix("/position")]["data"]["position"]
-                                    for k in self.config.robot_action_keys
-                                ],
-                                [],
-                            ),
-                            dtype=model_dtype,
-                            device=self.device,
-                        ).unsqueeze(0)
+                            # x_t = torch.tensor(
+                            #     sum(
+                            #         [
+                            #             obs[k.removesuffix("/position")]["data"][
+                            #                 "position"
+                            #             ]
+                            #             for k in self.config.robot_action_keys
+                            #         ],
+                            #         [],
+                            #     ),
+                            #     dtype=model_dtype,
+                            #     device=self.device,
+                            # ).unsqueeze(0)
+                            x_t = pred_x_t1
 
-                        # print(obs.keys())
-                        features = {}
-                        for key in self.config.image_keys:
-                            features[key] = extractor.process_image(
-                                obs[key]["data"], prompt
-                            )["features_proj"]
-                        a_t = features[self.config.image_keys[0]]
-                        # print("a_t shape:", a_t.shape)
-                        # print("x_t shape:", x_t.shape)
-                        a_t = a_t.to(dtype=model_dtype)
-                        self.model.eval()
-                        with torch.no_grad():
+                            # print(obs.keys())
+                            print("Processing features..")
+                            features = {}
+                            for key in self.config.image_keys:
+                                features[key] = extractor.process_image(
+                                    obs[key]["data"], prompt
+                                )["features_proj"]
+                            a_t = features[self.config.image_keys[0]]
+                            a_t = a_t.to(dtype=model_dtype)
+                            # print("a_t shape:", a_t.shape)
+                            # print("x_t shape:", x_t.shape)
+                            print("Predicting...")
                             pred_x_t1 = self.model(x_t, a_t, False)
                             action.action_values = [
                                 pred_x_t1.squeeze(0).cpu().numpy().tolist()
                             ]
+                            print(f"Step {step}")
                             env.input(action)
-                        time.sleep(dt)
-                except KeyboardInterrupt:
-                    print(f"Rollout interrupted by user at {step=}, resetting...")
-                    continue
-        except KeyboardInterrupt:
-            print("Inference session ended by user.")
+                            time.sleep(dt)
+                            # input("Step done. Press Enter to continue...")
+                    except KeyboardInterrupt:
+                        print(f"Rollout interrupted by user at {step=}, resetting...")
+                        continue
+            except KeyboardInterrupt:
+                print("Inference session ended by user.")
+        env.shutdown()
