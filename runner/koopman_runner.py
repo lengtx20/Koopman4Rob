@@ -702,24 +702,19 @@ class KoopmanRunner:
                     for step in count():
                         obs = env.output().observation
 
-                        x_t = (
-                            torch.tensor(
-                                sum(
-                                    [
-                                        obs[k.removesuffix("/position")]["data"][
-                                            "position"
-                                        ]
-                                        for k in self.config.robot_action_keys
-                                    ],
-                                    [],
-                                ),
-                                dtype=model_dtype,
-                            )
-                            .to(self.device)
-                            .unsqueeze(0)
-                        )
+                        x_t = torch.tensor(
+                            sum(
+                                [
+                                    obs[k.removesuffix("/position")]["data"]["position"]
+                                    for k in self.config.robot_action_keys
+                                ],
+                                [],
+                            ),
+                            dtype=model_dtype,
+                            device=self.device,
+                        ).unsqueeze(0)
 
-                        print(obs.keys())
+                        # print(obs.keys())
                         features = {}
                         for key in self.config.image_keys:
                             features[key] = extractor.process_image(
@@ -728,8 +723,6 @@ class KoopmanRunner:
                         a_t = features[self.config.image_keys[0]]
                         # print("a_t shape:", a_t.shape)
                         # print("x_t shape:", x_t.shape)
-                        # assert x_t.shape[1] == self.model.state_dim
-                        # assert a_t.shape[1] == self.model.action_dim
                         a_t = a_t.to(dtype=model_dtype)
                         self.model.eval()
                         with torch.no_grad():
