@@ -1,7 +1,7 @@
 from torchdata import nodes
 from mcap_data_loader.datasets.mcap_dataset import (
     McapFlatBuffersSampleDataset,
-    SampleType,
+    SampleStamped,
     McapFlatBuffersEpisodeDataset,
     McapFlatBuffersEpisodeDatasetConfig,
 )
@@ -41,7 +41,7 @@ def create_mcap_dataloader(
     )
 
     def process_batched_sample(
-        batched_samples: List[Tuple[SampleType, SampleType]],
+        batched_samples: List[Tuple[SampleStamped, SampleStamped]],
     ) -> torch.Tensor:
         batched_list = []
         for sample in batched_samples:
@@ -50,7 +50,7 @@ def create_mcap_dataloader(
             for s in sample:
                 tensor_sample = {}
                 for key, value in s.items():
-                    tensor_sample[key] = torch.from_numpy(value).to(
+                    tensor_sample[key] = torch.from_numpy(value["data"]).to(
                         device=device, dtype=dtype
                     )
                 tensor_samples.append(tensor_sample)

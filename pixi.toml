@@ -34,5 +34,5 @@ transformers = ">=4.57.1,<5"
 # typing_extensions = ">=4.15.0,<5"
 
 [pypi-dependencies]
-mcap-data-loader = { git = "https://github.com/OpenGHz/MCAP-DataLoader.git", rev = "59487591ac1e68b6b23c07516dc0ac976e5f71bd" }
+mcap-data-loader = { git = "https://github.com/OpenGHz/MCAP-DataLoader.git", rev = "6a0f736d0774a39da94094561594019edd5d5fe3" }
 typing_extensions = "==4.15.0"
