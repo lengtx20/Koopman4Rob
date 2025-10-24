@@ -260,8 +260,9 @@ class InferConfig(BaseModel):
 
     # TODO: use deriving structure for config
     extra_models: Dict[str, Dict] = {}
-    dataset_as_env: bool = True
-    open_loop: bool = False
+    obs_from_dataset: bool = True
+    open_loop_predict: bool = False
+    send_action: bool = True
 
 
 class ModelConfig(BaseModel):

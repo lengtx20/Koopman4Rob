@@ -744,7 +744,7 @@ class KoopmanRunner:
                         break
                     try:
                         for step in count():
-                            if use_dataset and self.config.infer.dataset_as_env:
+                            if use_dataset and self.config.infer.obs_from_dataset:
                                 obs = next(sample_iter)
                             else:
                                 obs = env.output().observation
@@ -760,7 +760,7 @@ class KoopmanRunner:
                             )
                             loss = torch.norm(cur_x_t - pred_x_t1)
                             print(f"RMSE: {loss} rad, {loss / np.pi * 180} deg")
-                            if self.config.infer.open_loop:
+                            if self.config.infer.open_loop_predict:
                                 x_t = pred_x_t1
                             else:
                                 x_t = cur_x_t
@@ -782,7 +782,7 @@ class KoopmanRunner:
                                 pred_x_t1.squeeze(0).cpu().numpy().tolist()
                             ]
                             print(f"Step {step} action: {action.action_values}")
-                            if not env.input(action):
+                            if self.config.infer.send_action and not env.input(action):
                                 print("Failed to send action, resetting...")
                                 break
                             time.sleep(dt)
