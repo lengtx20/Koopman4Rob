@@ -253,16 +253,17 @@ class TrainConfig(BaseModel):
 
 
 class InferConfig(BaseModel):
-    """Configuration for inference.
-    Args:
-        extra_model_path: Dict[str, Path], paths to extra models, e.g. vision backbones, for inference.
-    """
+    """Configuration for inference."""
 
     # TODO: use deriving structure for config
     extra_models: Dict[str, Dict] = {}
+    """paths to extra models, e.g. vision backbones, for inference"""
     obs_from_dataset: bool = True
+    action_from_dataset: bool = True
     open_loop_predict: bool = False
     send_action: bool = True
+    max_rollouts: NonNegativeInt = 0
+    max_steps: NonNegativeInt = 0
 
 
 class ModelConfig(BaseModel):

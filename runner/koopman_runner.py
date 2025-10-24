@@ -649,8 +649,8 @@ class KoopmanRunner:
             V4L2CameraConfig,
         )
 
-        # from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-        from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+        from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
+        # from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 
         action_keys = self.config.robot_action_keys
         use_dataset = self.config.data_dir is not None
@@ -723,7 +723,8 @@ class KoopmanRunner:
 
         from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
 
-        blip2_cfg = self.config.infer.extra_models["blip2-itm-vit-g"]
+        infer_cfg = self.config.infer
+        blip2_cfg = infer_cfg.extra_models["blip2-itm-vit-g"]
         prompt = blip2_cfg["prompt"]
         if not prompt:
             raise ValueError("BLIP2 prompt is empty.")
@@ -738,29 +739,40 @@ class KoopmanRunner:
         with torch.no_grad():
             try:
                 for rollout in count():
-                    sample_iter = iter(dataset[rollout])
+                    max_rollouts = infer_cfg.max_rollouts
+                    if max_rollouts > 0 and rollout > max_rollouts:
+                        break
+                    if use_dataset:
+                        sample_iter = iter(dataset[rollout])
                     env.reset()
                     if input(f"Press Enter to start {rollout=}...") == "q":
                         break
                     try:
                         for step in count():
-                            if use_dataset and self.config.infer.obs_from_dataset:
-                                obs = next(sample_iter)
+                            max_steps = infer_cfg.max_steps
+                            if max_steps > 0 and step > max_steps:
+                                break
+                            if use_dataset and (
+                                infer_cfg.obs_from_dataset
+                                or infer_cfg.action_from_dataset
+                            ):
+                                ds_obs = next(sample_iter)
+                            if infer_cfg.obs_from_dataset:
+                                obs = ds_obs
                             else:
                                 obs = env.output().observation
+                            cur_x_t_np = np.concatenate(
+                                [obs[key]["data"] for key in action_keys],
+                                dtype=torch_to_numpy_dtype_dict[model_dtype],
+                            )
                             cur_x_t = (
-                                torch.from_numpy(
-                                    np.concatenate(
-                                        [obs[key]["data"] for key in action_keys],
-                                        dtype=torch_to_numpy_dtype_dict[model_dtype],
-                                    )
-                                )
+                                torch.from_numpy(cur_x_t_np)
                                 .to(device=self.device)
                                 .unsqueeze(0)
                             )
                             loss = torch.norm(cur_x_t - pred_x_t1)
                             print(f"RMSE: {loss} rad, {loss / np.pi * 180} deg")
-                            if self.config.infer.open_loop_predict:
+                            if infer_cfg.open_loop_predict:
                                 x_t = pred_x_t1
                             else:
                                 x_t = cur_x_t
@@ -778,18 +790,25 @@ class KoopmanRunner:
                             # print("x_t shape:", x_t.shape)
                             print("Predicting...")
                             pred_x_t1 = self.model(x_t, a_t, False)
-                            action.action_values = [
-                                pred_x_t1.squeeze(0).cpu().numpy().tolist()
-                            ]
+                            if infer_cfg.action_from_dataset:
+                                # TODO: make sure using data from dataset
+                                action.action_values = [cur_x_t_np.tolist()]
+                            else:
+                                action.action_values = [
+                                    pred_x_t1.squeeze(0).cpu().numpy().tolist()
+                                ]
                             print(f"Step {step} action: {action.action_values}")
-                            if self.config.infer.send_action and not env.input(action):
+                            if infer_cfg.send_action and not env.input(action):
                                 print("Failed to send action, resetting...")
                                 break
                             time.sleep(dt)
                             input("Step done. Press Enter to continue...")
                     except KeyboardInterrupt:
                         print(f"Rollout interrupted by user at {step=}, resetting...")
-                        continue
+                    except StopIteration:
+                        print("Rollout stopped since dataset reached end")
             except KeyboardInterrupt:
                 print("Inference session ended by user.")
+            except StopIteration:
+                print("Inference session ended since dataset reached end.")
         env.shutdown()
