@@ -260,6 +260,8 @@ class InferConfig(BaseModel):
 
     # TODO: use deriving structure for config
     extra_models: Dict[str, Dict] = {}
+    dataset_as_env: bool = True
+    open_loop: bool = False
 
 
 class ModelConfig(BaseModel):

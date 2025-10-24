@@ -71,32 +71,33 @@ class KoopmanRunner:
         num_workers = config.num_workers
 
         # dataset
-        if config.data_dir:
-            from data.mcap_data_utils import create_train_val_dataloader
+        if config.mode != "infer":
+            if config.data_dir:
+                from data.mcap_data_utils import create_train_val_dataloader
 
-            self.train_loader, self.val_loader = create_train_val_dataloader(
-                config,
-                batch_size,
-                num_workers,
-                0.8 if mode == "train" else 1.0,
-            )
-        elif config.mode != "infer":
-            self.train_loader = DataLoader(
-                KoopmanDataset(train_data),
-                batch_size=batch_size,
-                shuffle=(True and mode == "train"),
-                num_workers=num_workers,
-            )
-            self.val_loader = (
-                DataLoader(
-                    KoopmanDataset(val_data),
+                self.train_loader, self.val_loader = create_train_val_dataloader(
+                    config,
+                    batch_size,
+                    num_workers,
+                    0.8 if mode == "train" else 1.0,
+                )
+            else:
+                self.train_loader = DataLoader(
+                    KoopmanDataset(train_data),
                     batch_size=batch_size,
-                    shuffle=False,
+                    shuffle=(True and mode == "train"),
                     num_workers=num_workers,
                 )
-                if val_data is not None
-                else None
-            )
+                self.val_loader = (
+                    DataLoader(
+                        KoopmanDataset(val_data),
+                        batch_size=batch_size,
+                        shuffle=False,
+                        num_workers=num_workers,
+                    )
+                    if val_data is not None
+                    else None
+                )
 
         # normalization (TODO)
         if self.normalize:
@@ -648,23 +649,43 @@ class KoopmanRunner:
             V4L2CameraConfig,
         )
 
-        from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-        # from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+        # from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
+        from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 
-        reset_action = [
-            # -0.0085832,
-            # 0.18596932,
-            # -0.08869307,
-            # 0.08602273,
-            # -0.04520485,
-            # -0.09670405,
-            -0.08411535620689392,
-            -0.4709315598011017,
-            0.699816882610321,
-            -0.010872052982449532,
-            0.04901960864663124,
-            -0.03452353551983833,
-        ]
+        action_keys = self.config.robot_action_keys
+        use_dataset = self.config.data_dir is not None
+        from mcap_data_loader.utils.pytorch import torch_to_numpy_dtype_dict
+
+        if use_dataset:
+            from mcap_data_loader.datasets.mcap_dataset import (
+                McapFlatBuffersEpisodeDataset,
+                McapFlatBuffersEpisodeDatasetConfig,
+            )
+
+            dataset = McapFlatBuffersEpisodeDataset(
+                McapFlatBuffersEpisodeDatasetConfig(
+                    data_root=self.config.data_dir,
+                    keys=self.config.image_keys + action_keys,
+                    strict=False,
+                )
+            )
+            dataset.load()
+            reset_action = next(iter(dataset[0]))[action_keys[0]]["data"].tolist()
+        else:
+            reset_action = [
+                # -0.0085832,
+                # 0.18596932,
+                # -0.08869307,
+                # 0.08602273,
+                # -0.04520485,
+                # -0.09670405,
+                -0.08411535620689392,
+                -0.4709315598011017,
+                0.699816882610321,
+                -0.010872052982449532,
+                0.04901960864663124,
+                -0.03452353551983833,
+            ]
         env = GroupedEnvironment(
             GroupedEnvironmentConfig(
                 components=SystemSensorComponentGroupsConfig(
@@ -673,9 +694,7 @@ class KoopmanRunner:
                     roles=["l", "o"],
                     instances=[
                         AIRBOTPlay(AIRBOTPlayConfig()),
-                        V4L2Camera(
-                            V4L2CameraConfig(camera_index="usb-0000:64:00.3-1.3")
-                        ),
+                        V4L2Camera(V4L2CameraConfig(camera_index=None)),
                     ],
                 ),
                 reset_action=GroupsSendActionConfig(
@@ -719,27 +738,32 @@ class KoopmanRunner:
         with torch.no_grad():
             try:
                 for rollout in count():
+                    sample_iter = iter(dataset[rollout])
                     env.reset()
                     if input(f"Press Enter to start {rollout=}...") == "q":
                         break
                     try:
                         for step in count():
-                            obs = env.output().observation
-
-                            # x_t = torch.tensor(
-                            #     sum(
-                            #         [
-                            #             obs[k.removesuffix("/position")]["data"][
-                            #                 "position"
-                            #             ]
-                            #             for k in self.config.robot_action_keys
-                            #         ],
-                            #         [],
-                            #     ),
-                            #     dtype=model_dtype,
-                            #     device=self.device,
-                            # ).unsqueeze(0)
-                            x_t = pred_x_t1
+                            if use_dataset and self.config.infer.dataset_as_env:
+                                obs = next(sample_iter)
+                            else:
+                                obs = env.output().observation
+                            cur_x_t = (
+                                torch.from_numpy(
+                                    np.concatenate(
+                                        [obs[key]["data"] for key in action_keys],
+                                        dtype=torch_to_numpy_dtype_dict[model_dtype],
+                                    )
+                                )
+                                .to(device=self.device)
+                                .unsqueeze(0)
+                            )
+                            loss = torch.norm(cur_x_t - pred_x_t1)
+                            print(f"RMSE: {loss} rad, {loss / np.pi * 180} deg")
+                            if self.config.infer.open_loop:
+                                x_t = pred_x_t1
+                            else:
+                                x_t = cur_x_t
 
                             # print(obs.keys())
                             print("Processing features..")
@@ -762,7 +786,7 @@ class KoopmanRunner:
                                 print("Failed to send action, resetting...")
                                 break
                             time.sleep(dt)
-                            # input("Step done. Press Enter to continue...")
+                            input("Step done. Press Enter to continue...")
                     except KeyboardInterrupt:
                         print(f"Rollout interrupted by user at {step=}, resetting...")
                         continue
