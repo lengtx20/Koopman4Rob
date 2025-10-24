@@ -757,8 +757,10 @@ class KoopmanRunner:
                             action.action_values = [
                                 pred_x_t1.squeeze(0).cpu().numpy().tolist()
                             ]
-                            print(f"Step {step}")
-                            env.input(action)
+                            print(f"Step {step} action: {action.action_values}")
+                            if not env.input(action):
+                                print("Failed to send action, resetting...")
+                                break
                             time.sleep(dt)
                             # input("Step done. Press Enter to continue...")
                     except KeyboardInterrupt:
