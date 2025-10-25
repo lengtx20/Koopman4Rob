@@ -264,6 +264,10 @@ class InferConfig(BaseModel):
     send_action: bool = True
     max_rollouts: NonNegativeInt = 0
     max_steps: NonNegativeInt = 0
+    frequency: int = 0
+    """The frequency (in steps) to send action commands.
+    0 means wait for input after every step. Negative means no limit.
+    """
 
 
 class ModelConfig(BaseModel):

@@ -649,8 +649,8 @@ class KoopmanRunner:
             V4L2CameraConfig,
         )
 
-        from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-        # from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+        # from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
+        from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 
         action_keys = self.config.robot_action_keys
         use_dataset = self.config.data_dir is not None
@@ -732,7 +732,8 @@ class KoopmanRunner:
             raise FileNotFoundError(f"BLIP2 model not found at {blip2_cfg['path']}")
         extractor = Blip2ImageFeatureExtractor(model_path=blip2_cfg["path"])
         extractor.load_model()
-        dt = 1 / 20.0  # 20 Hz
+        freq = infer_cfg.frequency
+        dt = 1 / freq if freq != 0 else 0
         pred_x_t1 = torch.tensor(
             reset_action, dtype=model_dtype, device=self.device
         ).unsqueeze(0)
@@ -801,8 +802,10 @@ class KoopmanRunner:
                             if infer_cfg.send_action and not env.input(action):
                                 print("Failed to send action, resetting...")
                                 break
-                            time.sleep(dt)
-                            input("Step done. Press Enter to continue...")
+                            if dt > 0:
+                                time.sleep(dt)
+                            elif dt == 0:
+                                input("Step done. Press Enter to continue...")
                     except KeyboardInterrupt:
                         print(f"Rollout interrupted by user at {step=}, resetting...")
                     except StopIteration:
