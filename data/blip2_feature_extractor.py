@@ -180,6 +180,7 @@ if __name__ == "__main__":
     from mcap_data_loader.datasets.mcap_dataset import (
         McapFlatBuffersEpisodeDataset,
         McapFlatBuffersEpisodeDatasetConfig,
+        McapFlatBuffersSampleDataset,
     )
 
     # TODO: maybe there can be a reversed dataset that writes to MCAP?
@@ -212,6 +213,7 @@ if __name__ == "__main__":
         help="Prompt for feature extraction",
         # default="Open the cabinet door",
         default="Open the drawer with the black handle",
+        # default="Open the drawer with the black handle",
     )
     parser.add_argument(
         "--keys",
@@ -254,7 +256,7 @@ if __name__ == "__main__":
         output_dir = Path(output_dir)
     executor = PoolExecutor(max_workers=args.num_workers)
 
-    def process_episode(index, episode):
+    def process_episode(index, episode: McapFlatBuffersSampleDataset):
         print(
             f"Processing episode {index + 1}/{len(dataset)}: {episode.config.data_root}"
         )
@@ -268,10 +270,12 @@ if __name__ == "__main__":
         for sample in tqdm(episode, desc="Processing samples", total=len(episode)):
             # pprint(sample)
             for key, value in sample.items():
-                features_dict = extractor.process_image(value[:, :, ::-1], args.prompt)
+                features_dict = extractor.process_image(
+                    value["data"][:, :, ::-1].copy(), args.prompt
+                )
                 for feature_key, features in features_dict.items():
                     # print(features.shape)
-                    writer.add_array(
+                    writer.add_float_array(
                         f"{key}/{feature_key}",
                         features.squeeze(0).tolist(),
                         time_ns(),
