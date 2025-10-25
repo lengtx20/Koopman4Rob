@@ -16,6 +16,7 @@ from config import Config
 from pprint import pprint
 from collections import defaultdict, Counter
 from itertools import count
+import statistics
 
 
 class KoopmanDataset(Dataset):
@@ -661,12 +662,16 @@ class KoopmanRunner:
                 McapFlatBuffersEpisodeDataset,
                 McapFlatBuffersEpisodeDatasetConfig,
             )
+            from mcap_data_loader.utils.av_coder import DecodeConfig
 
             dataset = McapFlatBuffersEpisodeDataset(
                 McapFlatBuffersEpisodeDatasetConfig(
                     data_root=self.config.data_dir,
                     keys=self.config.image_keys + action_keys,
                     strict=False,
+                    media_configs=[
+                        DecodeConfig(mismatch_tolerance=5, frame_format="rgb24")
+                    ],
                 )
             )
             dataset.load()
@@ -737,9 +742,23 @@ class KoopmanRunner:
         pred_x_t1 = torch.tensor(
             reset_action, dtype=model_dtype, device=self.device
         ).unsqueeze(0)
+        from torchvision.transforms import v2
+        import cv2
+        import einops
+
+        image_transform = v2.Compose(
+            [
+                v2.ToImage(),
+                v2.ColorJitter(brightness=(0.5, 1.5), contrast=(0.5, 1.5)),
+                v2.RandomAdjustSharpness(sharpness_factor=2, p=1),
+                v2.ToDtype(extractor.dtype),
+            ]
+        )
+        all_losses = []
         with torch.no_grad():
             try:
                 for rollout in count():
+                    losses = []
                     max_rollouts = infer_cfg.max_rollouts
                     if max_rollouts > 0 and rollout > max_rollouts:
                         break
@@ -771,25 +790,37 @@ class KoopmanRunner:
                                 .to(device=self.device)
                                 .unsqueeze(0)
                             )
-                            loss = torch.norm(cur_x_t - pred_x_t1)
-                            print(f"RMSE: {loss} rad, {loss / np.pi * 180} deg")
+                            loss = torch.norm(cur_x_t - pred_x_t1) / np.pi * 180
+                            print(f"RMSE: {loss} deg")
+                            losses.append(loss.item())
                             if infer_cfg.open_loop_predict:
                                 x_t = pred_x_t1
                             else:
                                 x_t = cur_x_t
 
                             # print(obs.keys())
-                            print("Processing features..")
+                            # print("Processing features..")
                             features = {}
                             for key in self.config.image_keys:
-                                features[key] = extractor.process_image(
-                                    obs[key]["data"], prompt
-                                )["features_proj"]
+                                img = obs[key]["data"]
+                                img = np.ones(img.shape)
+                                img: torch.Tensor = image_transform(img)
+                                if infer_cfg.show_image:
+                                    np_img = einops.rearrange(
+                                        img.cpu().float().numpy().astype(np.uint8),
+                                        "c h w -> h w c",
+                                    )
+                                    cv2.imshow(key, np_img[:, :, ::-1].copy())
+                                features[key] = extractor.process_image(img, prompt)[
+                                    "features_proj"
+                                ]
+                            if infer_cfg.show_image:
+                                cv2.waitKey(1)
                             a_t = features[self.config.image_keys[0]]
                             a_t = a_t.to(dtype=model_dtype)
                             # print("a_t shape:", a_t.shape)
                             # print("x_t shape:", x_t.shape)
-                            print("Predicting...")
+                            # print("Predicting...")
                             pred_x_t1 = self.model(x_t, a_t, False)
                             if infer_cfg.action_from_dataset:
                                 # TODO: make sure using data from dataset
@@ -798,7 +829,7 @@ class KoopmanRunner:
                                 action.action_values = [
                                     pred_x_t1.squeeze(0).cpu().numpy().tolist()
                                 ]
-                            print(f"Step {step} action: {action.action_values}")
+                            # print(f"Step {step} action: {action.action_values}")
                             if infer_cfg.send_action and not env.input(action):
                                 print("Failed to send action, resetting...")
                                 break
@@ -810,8 +841,22 @@ class KoopmanRunner:
                         print(f"Rollout interrupted by user at {step=}, resetting...")
                     except StopIteration:
                         print("Rollout stopped since dataset reached end")
+                    mean_loss = statistics.mean(losses)
+                    mean_std = statistics.stdev(losses) if len(losses) > 1 else 0.0
+                    print(
+                        f"Rollout {rollout} loss mean: {mean_loss} std: {mean_std} deg"
+                    )
+                    all_losses.append(mean_loss)
+                    if infer_cfg.show_image:
+                        cv2.destroyAllWindows()
             except KeyboardInterrupt:
                 print("Inference session ended by user.")
             except StopIteration:
                 print("Inference session ended since dataset reached end.")
+        if all_losses:
+            overall_mean = statistics.mean(all_losses)
+            overall_std = statistics.stdev(all_losses) if len(all_losses) > 1 else 0.0
+            print(
+                f"Overall inference mean loss: {overall_mean}, std: {overall_std} deg, over {len(all_losses)} rollouts."
+            )
         env.shutdown()

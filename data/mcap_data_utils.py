@@ -6,7 +6,7 @@ from mcap_data_loader.datasets.mcap_dataset import (
     McapFlatBuffersEpisodeDatasetConfig,
 )
 from mcap_data_loader.utils.extra_itertools import Reusablizer, epairwise
-from mcap_data_loader.piplines import NestedZip, NestedZipConfig, Merge, MergeConfig
+from mcap_data_loader.pipelines import NestedZip, NestedZipConfig, Merge, MergeConfig
 from typing import Tuple, List
 from config import Config
 from functools import partial

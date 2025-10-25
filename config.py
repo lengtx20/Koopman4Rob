@@ -268,6 +268,7 @@ class InferConfig(BaseModel):
     """The frequency (in steps) to send action commands.
     0 means wait for input after every step. Negative means no limit.
     """
+    show_image: bool = False
 
 
 class ModelConfig(BaseModel):
@@ -316,7 +317,9 @@ class Config(CommonConfig):
                 "path": Path("pretrained_models/blip2-itm-vit-g"),
                 "prompt": "Open the drawer with the black handle",
             }
-        }
+        },
+        frequency=0,
+        show_image=True,
     )
 
     def model_post_init(self, context):

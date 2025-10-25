@@ -187,6 +187,7 @@ if __name__ == "__main__":
         McapFlatBuffersWriter,
         FlatBuffersSchemas,
     )
+    from mcap_data_loader.utils.av_coder import DecodeConfig
     from time import time_ns, monotonic
     from pathlib import Path
     from tqdm import tqdm
@@ -242,6 +243,7 @@ if __name__ == "__main__":
             data_root=input_dir,
             keys=keys,
             strict=False,
+            media_configs=[DecodeConfig(mismatch_tolerance=5, frame_format="rgb24")],
         )
     )
     dataset.load()
@@ -266,7 +268,7 @@ if __name__ == "__main__":
         for sample in tqdm(episode, desc="Processing samples", total=len(episode)):
             # pprint(sample)
             for key, value in sample.items():
-                features_dict = extractor.process_image(value, args.prompt)
+                features_dict = extractor.process_image(value[:, :, ::-1], args.prompt)
                 for feature_key, features in features_dict.items():
                     # print(features.shape)
                     writer.add_array(
