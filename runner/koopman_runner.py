@@ -742,18 +742,23 @@ class KoopmanRunner:
         pred_x_t1 = torch.tensor(
             reset_action, dtype=model_dtype, device=self.device
         ).unsqueeze(0)
-        from torchvision.transforms import v2
-        import cv2
-        import einops
 
-        image_transform = v2.Compose(
-            [
-                v2.ToImage(),
-                v2.ColorJitter(brightness=(0.5, 1.5), contrast=(0.5, 1.5)),
-                v2.RandomAdjustSharpness(sharpness_factor=2, p=1),
-                v2.ToDtype(extractor.dtype),
-            ]
-        )
+        if infer_cfg.show_image:
+            import cv2
+            import einops
+
+        from torchvision.transforms import v2
+
+        transforms = [v2.ToImage()]
+        if infer_cfg.image_transform:
+            transforms.extend(
+                [
+                    v2.ColorJitter(brightness=(0.5, 1.5), contrast=(0.5, 1.5)),
+                    v2.RandomAdjustSharpness(sharpness_factor=2, p=1),
+                ]
+            )
+        transforms.append(v2.ToDtype(extractor.dtype))
+        image_transform = v2.Compose(transforms)
         all_losses = []
         with torch.no_grad():
             try:

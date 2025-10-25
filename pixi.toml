@@ -30,9 +30,10 @@ tensorboard = ">=2.20.0,<3"
 scipy = ">=1.10,<2"
 torchdata = ">=0.11.0,<0.12"
 transformers = ">=4.57.1,<5"
+einops = "*"
 ## NOTE: Install typing_extensions via PyPI to avoid conda packaging issues in this env
 # typing_extensions = ">=4.15.0,<5"
 
 [pypi-dependencies]
-mcap-data-loader = { git = "https://github.com/OpenGHz/MCAP-DataLoader.git", rev = "25d472f04b75fa81636768a678b0e9c73ed65bbe" }
+mcap-data-loader = { git = "https://github.com/OpenGHz/MCAP-DataLoader.git", rev = "e62ecd7db315248cdb0a51f68b160d542df43ef5" }
 typing_extensions = "==4.15.0"

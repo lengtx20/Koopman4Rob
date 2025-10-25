@@ -269,6 +269,7 @@ class InferConfig(BaseModel):
     0 means wait for input after every step. Negative means no limit.
     """
     show_image: bool = False
+    image_transform: bool = False
 
 
 class ModelConfig(BaseModel):
@@ -318,8 +319,9 @@ class Config(CommonConfig):
                 "prompt": "Open the drawer with the black handle",
             }
         },
+        # test for one step prediction of the dataset
         frequency=0,
-        show_image=True,
+        show_image=False,
     )
 
     def model_post_init(self, context):
