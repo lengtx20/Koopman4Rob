@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def inspect_npy_file(file_path):
     print(f"\n=== 文件信息: {file_path} ===")
     data = np.load(file_path)
@@ -16,6 +17,7 @@ def inspect_npy_file(file_path):
         print(f"dtype: {data.dtype}")
         print("前几行数据:")
         print(data[:3])
+
 
 if __name__ == "__main__":
     inspect_npy_file("111.npz")

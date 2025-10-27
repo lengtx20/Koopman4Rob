@@ -8,18 +8,11 @@ import numpy as np
 import os
 
 # file path
-file_paths = [
-    "1.csv",
-    "1_freeze_encoder.csv",
-    "1_freeze_matrix.csv"
-]
+file_paths = ["1.csv", "1_freeze_encoder.csv", "1_freeze_matrix.csv"]
 
 # legend name
-labels = [
-    "Full Model",
-    "Matrix Fine-tune",
-    "Lifting Function Fine-tune"
-]
+labels = ["Full Model", "Matrix Fine-tune", "Lifting Function Fine-tune"]
+
 
 # ======== EMA Smooth ========
 def ema_smooth(values, alpha=0.9):
@@ -30,22 +23,26 @@ def ema_smooth(values, alpha=0.9):
         smoothed.append(last)
     return np.array(smoothed)
 
+
 # ======== IJRR Style ========
-mpl.rcParams.update({
-    "font.family": "serif",
-    "font.serif": ["DejaVu Serif"],
-    "font.size": 14,
-    "axes.labelsize": 16,
-    "axes.titlesize": 16,
-    "legend.fontsize": 13,
-    "xtick.labelsize": 13,
-    "ytick.labelsize": 13,
-    "axes.linewidth": 1.2,
-    "lines.linewidth": 2.2,
-    "figure.figsize": (6.0, 4.0),
-})
+mpl.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.serif": ["DejaVu Serif"],
+        "font.size": 14,
+        "axes.labelsize": 16,
+        "axes.titlesize": 16,
+        "legend.fontsize": 13,
+        "xtick.labelsize": 13,
+        "ytick.labelsize": 13,
+        "axes.linewidth": 1.2,
+        "lines.linewidth": 2.2,
+        "figure.figsize": (6.0, 4.0),
+    }
+)
 
 colors = ["#1f77b4", "#2ca02c", "#d62728"]  # blue, green, red
+
 
 # ======== Plot ========
 def plot_tensorboard_csvs():
@@ -81,6 +78,7 @@ def plot_tensorboard_csvs():
     plt.savefig(out_name, dpi=300, bbox_inches="tight")
     print(f"Fig saved: {out_name}")
     plt.show()
+
 
 # ======== main ========
 if __name__ == "__main__":

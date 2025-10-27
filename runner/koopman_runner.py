@@ -512,7 +512,7 @@ class KoopmanRunner:
         print("[DEBUG] pred_x_t1 shape:", pred_x_t1.shape)
         time_idx = np.arange(len(x_t))
         num_dims = self.model.state_dim
-        ncols = min(2, num_dims)    # 2 in each row at most
+        ncols = min(2, num_dims)  # 2 in each row at most
         nrows = (num_dims + ncols - 1) // ncols
 
         plt.figure(figsize=(6 * ncols, 3 * nrows))

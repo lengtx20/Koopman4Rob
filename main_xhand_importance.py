@@ -9,6 +9,7 @@ from torch.nn import MSELoss
 from models.deep_koopman import Deep_Koopman
 from runner.koopman_runner import KoopmanRunner
 
+
 def load_data(mode, data_dir, ratio: float = 1.0):
     """
     Load and preprocess XHAND dataset.
@@ -21,9 +22,9 @@ def load_data(mode, data_dir, ratio: float = 1.0):
         train_data, val_data
     """
     traj = []
-    for i in [1,2,3,4,5,6]:           # force levels
-        for j in [1]:       # block type
-            for k in [1,2,3]:   # repetition
+    for i in [1, 2, 3, 4, 5, 6]:  # force levels
+        for j in [1]:  # block type
+            for k in [1, 2, 3]:  # repetition
                 file_name = f"{i}{j}{k}.npz.npy"
                 file_path = os.path.join(data_dir, file_name)
                 if not os.path.exists(file_path):
@@ -52,8 +53,16 @@ def load_data(mode, data_dir, ratio: float = 1.0):
     return train_data, val_data
 
 
-def run(mode="train", data_dir=None, load_model_dir=None, save_model_dir=None, fisher_path=None,
-        freeze_encoder=False, freeze_decoder=False, freeze_matrix=False):
+def run(
+    mode="train",
+    data_dir=None,
+    load_model_dir=None,
+    save_model_dir=None,
+    fisher_path=None,
+    freeze_encoder=False,
+    freeze_decoder=False,
+    freeze_matrix=False,
+):
     """
     params:
         mode: 'train' or 'test'
@@ -72,8 +81,8 @@ def run(mode="train", data_dir=None, load_model_dir=None, save_model_dir=None, f
     # ===== init model and algorithm ===== #
     loss_fn = MSELoss()
     model = Deep_Koopman(
-        state_dim=25,               # XHAND has 25-dimensional state
-        action_dim=8,               # 8-dimensional action
+        state_dim=25,  # XHAND has 25-dimensional state
+        action_dim=8,  # 8-dimensional action
         hidden_sizes=[256] * 3,
         lifted_dim=128,
         seed=42,
@@ -129,15 +138,23 @@ def run(mode="train", data_dir=None, load_model_dir=None, save_model_dir=None, f
         print("[INFO] Testing !")
         runner.test(load_model_dir=load_model_dir)
     else:
-        raise ValueError(f"[ERROR] Unknown mode: {mode}. Choose only between 'train' and 'test'.")
+        raise ValueError(
+            f"[ERROR] Unknown mode: {mode}. Choose only between 'train' and 'test'."
+        )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train/test Deep Koopman model on XHAND dataset")
+    parser = argparse.ArgumentParser(
+        description="Train/test Deep Koopman model on XHAND dataset"
+    )
     parser.add_argument("--mode", type=str, default="train", choices=["train", "test"])
     parser.add_argument("--data_dir", type=str, default="data/xhand/converted_data")
     parser.add_argument("--load_model_dir", type=str, default=None)
-    parser.add_argument("--save_model_dir", type=str, default="EXPERIMENTS/1_importance_encoder_matrix/xhand/1")
+    parser.add_argument(
+        "--save_model_dir",
+        type=str,
+        default="EXPERIMENTS/1_importance_encoder_matrix/xhand/1",
+    )
     parser.add_argument("--fisher_path", type=str, default=None)
     parser.add_argument("--freeze_encoder", action="store_true")
     parser.add_argument("--freeze_decoder", action="store_true")

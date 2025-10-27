@@ -139,7 +139,7 @@ class CyberDogDataProcessor:
         q_list = q_list[:min_length]
         qd_list = qd_list[:min_length]
         tau_est_list = tau_est_list[:min_length]
-        
+
         # Merge data
         action = np.concatenate(
             [

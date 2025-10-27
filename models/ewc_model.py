@@ -26,9 +26,7 @@ class EWCModel:
         self.params = {
             n: p for n, p in self.model.named_parameters() if p.requires_grad
         }
-        self.means = {
-            n: p.clone().detach() for n, p in self.params.items()
-        }
+        self.means = {n: p.clone().detach() for n, p in self.params.items()}
         self.fisher = None
 
     def compute_fisher(self, data_tensor, batch_size=64):
@@ -46,8 +44,7 @@ class EWCModel:
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
         fisher_dict = {
-            n: torch.zeros_like(p, device=self.device)
-            for n, p in self.params.items()
+            n: torch.zeros_like(p, device=self.device) for n, p in self.params.items()
         }
 
         print("[EWC] Computing Fisher Information Matrix...")
@@ -77,12 +74,6 @@ class EWCModel:
         print("[EWC] Fisher computation finished.")
         return fisher_dict
 
-
-
-
-
-
-
     def penalty(self, model):
         """Compute the EWC penalty for the given model."""
         if self.fisher is None:
@@ -95,11 +86,6 @@ class EWCModel:
                 mean = self.means[n]
                 loss += torch.sum(fisher * (p - mean) ** 2)
         return loss
-
-
-
-
-
 
     def save(self, save_dir, task_id=0):
         os.makedirs(save_dir, exist_ok=True)

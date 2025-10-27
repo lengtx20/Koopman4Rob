@@ -1,5 +1,5 @@
 """
-This script converts raw CyberDog data into the (x_t, u_t) format, 
+This script converts raw CyberDog data into the (x_t, u_t) format,
 and then further into (x_t, u_t, x_{t+1}), saving the results as .npy files.
 
 Batch processing: all .npy files in the current directory will be converted.
@@ -10,7 +10,6 @@ Args:
     n (int): Dimension of the state.
     m (int): Dimension of the control.
 """
-
 
 import numpy as np
 import os

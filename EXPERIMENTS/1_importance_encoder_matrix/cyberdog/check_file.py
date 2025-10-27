@@ -19,6 +19,7 @@ import sys
 import pandas as pd
 import numpy as np
 
+
 def analyze_csv(csv_path):
     try:
         df = pd.read_csv(csv_path)
@@ -50,6 +51,7 @@ def analyze_csv(csv_path):
     # 可选：显示最后几行（检查趋势）
     print("\n最后 5 行数据示例:")
     print(df.tail())
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

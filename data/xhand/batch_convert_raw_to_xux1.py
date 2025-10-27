@@ -18,9 +18,11 @@ from data_loader import extract_flattened_data_for_xhand
 
 def convert_xu_to_xux1(data: np.ndarray, n: int, m: int):
     """Convert (x_t, u_t) → (x_t, u_t, x_{t+1})."""
-    assert data.shape[1] == n + m, f"Expected dimension {n + m}, but got {data.shape[1]}"
-    x_u_t = data[:-1, :]       # (T-1, n+m)
-    x_tp1 = data[1:, :n]       # (T-1, n)
+    assert data.shape[1] == n + m, (
+        f"Expected dimension {n + m}, but got {data.shape[1]}"
+    )
+    x_u_t = data[:-1, :]  # (T-1, n+m)
+    x_tp1 = data[1:, :n]  # (T-1, n)
     xu_x1 = np.concatenate([x_u_t, x_tp1], axis=1)  # (T-1, n+m+n)
     return xu_x1
 

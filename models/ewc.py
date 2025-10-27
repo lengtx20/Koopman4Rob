@@ -11,7 +11,7 @@ class EWC:
         self.device = device
         self.loss_fn = loss_fn
         self.threshold = threshold
-        
+
         self.params = {
             n: p.clone().detach()
             for n, p in model.named_parameters()

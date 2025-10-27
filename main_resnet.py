@@ -8,6 +8,7 @@ from models.deep_koopman import Deep_Koopman
 from runner.koopman_runner import KoopmanRunner
 import os
 
+
 def load_data(mode, data_dir, ratio: float = 0.8):
     traj = []
     for i in range(64):
@@ -18,17 +19,22 @@ def load_data(mode, data_dir, ratio: float = 0.8):
 
     if mode == "test":
         length = int(len(traj) * ratio)
-        train_data = np.concatenate(traj[:64-length], axis=0)
+        train_data = np.concatenate(traj[: 64 - length], axis=0)
         val_data = np.concatenate(traj[length:], axis=0)
-        print(f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}")
+        print(
+            f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}"
+        )
     elif mode == "train":
         length = int(len(traj) * ratio)
         train_data = np.concatenate(traj[:length], axis=0)
         val_data = np.concatenate(traj[length:], axis=0)
-        print(f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}")
+        print(
+            f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}"
+        )
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
     return train_data, val_data
+
 
 def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
     """
@@ -44,7 +50,7 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
 
     print(f"[INFO] Loading Data from {data_dir}")
     train_data, val_data = load_data(mode, data_dir)
-    
+
     # ===== init model and alg ===== #
     loss_fn = MSELoss()
     model = Deep_Koopman(
@@ -105,6 +111,7 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
         )
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
+
 
 if __name__ == "__main__":
     run(

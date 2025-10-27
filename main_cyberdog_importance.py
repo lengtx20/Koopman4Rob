@@ -9,8 +9,9 @@ from torch.nn import MSELoss
 from models.deep_koopman import Deep_Koopman
 from runner.koopman_runner import KoopmanRunner
 
-def load_data(mode, data_dir, ratio: float = 1.0): 
-    """ 
+
+def load_data(mode, data_dir, ratio: float = 1.0):
+    """
     params:
         ratio: train_data / all_data
     output:
@@ -19,9 +20,9 @@ def load_data(mode, data_dir, ratio: float = 1.0):
     """
     traj = []
     min_length = 1257
-    for i in [2]:           # 4
-        for j in [1, 2, 3]:       # 4
-            for k in [1, 2, 3, 4, 5]:   # 6
+    for i in [2]:  # 4
+        for j in [1, 2, 3]:  # 4
+            for k in [1, 2, 3, 4, 5]:  # 6
                 file_name = f"cyberdog_{i}{j}{k}.npy"
                 file_path = os.path.join(data_dir, file_name)
                 file_data = np.load(file_path)
@@ -43,9 +44,16 @@ def load_data(mode, data_dir, ratio: float = 1.0):
     return train_data, val_data
 
 
-def run(mode="test", data_dir=None, load_model_dir=None, save_model_dir=None, fisher_path=None, 
-        freeze_encoder=False, freeze_decoder=False, freeze_matrix=False
-    ):
+def run(
+    mode="test",
+    data_dir=None,
+    load_model_dir=None,
+    save_model_dir=None,
+    fisher_path=None,
+    freeze_encoder=False,
+    freeze_decoder=False,
+    freeze_matrix=False,
+):
     """
     params:
         mode:       select between train / test
@@ -84,7 +92,7 @@ def run(mode="test", data_dir=None, load_model_dir=None, save_model_dir=None, fi
     if freeze_decoder:
         model.freeze_decoder()
 
-    ewc = None      # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
+    ewc = None  # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     runner = KoopmanRunner(
         mode=mode,
@@ -113,7 +121,7 @@ def run(mode="test", data_dir=None, load_model_dir=None, save_model_dir=None, fi
             tb_log_dir=save_model_dir,
             task_id=1,
             fisher_path=fisher_path,
-            threshold_mode=None,    # threshold_mode="neural_ratio",
+            threshold_mode=None,  # threshold_mode="neural_ratio",
             ewc_threshold=1.0,
         )
         print(f"[INFO] Model saved to {save_model_dir}")
@@ -121,15 +129,27 @@ def run(mode="test", data_dir=None, load_model_dir=None, save_model_dir=None, fi
         print("[INFO] Testing !")
         runner.test(load_model_dir=load_model_dir)
     else:
-        raise ValueError(f"[ERROR] Unknown mode: {mode}. Choose only between 'train' and 'test'.")
+        raise ValueError(
+            f"[ERROR] Unknown mode: {mode}. Choose only between 'train' and 'test'."
+        )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train/test Deep Koopman model on CyberDog dataset")
+    parser = argparse.ArgumentParser(
+        description="Train/test Deep Koopman model on CyberDog dataset"
+    )
     parser.add_argument("--mode", type=str, default="test", choices=["train", "test"])
     parser.add_argument("--data_dir", type=str, default="data/cyberdog/converted_data")
-    parser.add_argument("--load_model_dir", type=str, default="EXPERIMENTS/1_importance_encoder_matrix/cyebrdog/1")
-    parser.add_argument("--save_model_dir", type=str, default="EXPERIMENTS/1_importance_encoder_matrix/cyebrdog/1_freeze_matrix")
+    parser.add_argument(
+        "--load_model_dir",
+        type=str,
+        default="EXPERIMENTS/1_importance_encoder_matrix/cyebrdog/1",
+    )
+    parser.add_argument(
+        "--save_model_dir",
+        type=str,
+        default="EXPERIMENTS/1_importance_encoder_matrix/cyebrdog/1_freeze_matrix",
+    )
     parser.add_argument("--fisher_path", type=str, default=None)
     parser.add_argument("--freeze_encoder", action="store_true")
     parser.add_argument("--freeze_decoder", action="store_true")
