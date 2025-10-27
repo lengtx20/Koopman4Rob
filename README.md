@@ -15,7 +15,7 @@ This repository's implementation is largely based on the following repositories:
 ```bash
 conda create -n koopman4rob python=3.8
 conda activate koopman4rob
-pip3 install -r descriptive_file/requirements.txt
+pip3 install -r requirements.txt
 ```
 
 ## 📁 Project Structure

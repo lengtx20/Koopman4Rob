@@ -227,13 +227,25 @@ class Deep_Koopman(nn.Module):
         return self.decode(z_next, get_action)
 
     def freeze_matrix(self):
-        pass
+        """Freeze Koopman linear dynamics matrices A and B"""
+        if hasattr(self, "A") and hasattr(self, "B"):
+            self.A.requires_grad = False
+            self.B.requires_grad = False
+            print("[INFO] Matrix A and B frozen !")
+        else:
+            raise AttributeError("Matrix A or B not initialized yet")
 
     def freeze_encoder(self):
-        pass
+        """Freeze all parameters in the encoder"""
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+        print("[INFO] Encoder frozen !")
 
     def freeze_decoder(self):
-        pass
+        """Freeze all parameters in the decoder"""
+        for param in self.decoder.parameters():
+            param.requires_grad = False
+        print("[INFO] Decoder frozen !")
 
     def save(self, model_dir):
         torch.save(self.encoder.state_dict(), f"{model_dir}/encoder.pth")

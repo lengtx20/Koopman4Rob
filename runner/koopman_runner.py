@@ -55,7 +55,7 @@ class KoopmanRunner:
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.train_data = train_data
-        self.val_data = val_data
+        self.val_data = val_data if len(val_data) != 0 else None
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.device = device
@@ -88,11 +88,11 @@ class KoopmanRunner:
                     shuffle=False,
                     num_workers=num_workers,
                 )
-                if val_data is not None
+                if self.val_data is not None
                 else None
             )
 
-        # normalization (TODO)
+        # Normalization (TODO). Purly emperical for now. Do not use.
         if self.normalize:
             self.state_mean = np.array(
                 [-1.27054915, 0.94617132, -0.32996104, 5.84603260]
@@ -281,7 +281,9 @@ class KoopmanRunner:
         self,
         max_epochs=100,
         save_model=True,
-        model_dir=None,
+        load_model_dir=None,
+        save_model_dir=None,
+        tb_log_dir=None,
         task_id=1,
         ewc_regularization=False,
         fisher_path=None,
@@ -299,6 +301,8 @@ class KoopmanRunner:
             self.load_fisher(fisher_path=fisher_path)
 
         # tensorboard
+        if tb_log_dir is not None:
+            self.tb_log_dir = tb_log_dir
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.tb_log_dir = os.path.join(self.tb_log_dir, f"{timestamp}")
         self.writer = SummaryWriter(log_dir=self.tb_log_dir)
@@ -379,23 +383,17 @@ class KoopmanRunner:
         self.writer.close()
 
         # ----- save models and losses & vales -----
-        if save_model and model_dir is not None:
-            os.makedirs(model_dir, exist_ok=True)
-            self.model.save(model_dir=model_dir)
-            print(f"[Runner] Model saved to {model_dir}")
+        if save_model and save_model_dir is not None:
+            os.makedirs(save_model_dir, exist_ok=True)
+            self.model.save(model_dir=save_model_dir)
+            print(f"[Runner] Model saved to {save_model_dir}")
         else:
             print("[INFO] No Koopman model saved")
 
-        if save_model and model_dir is not None:
-            self.model.save(model_dir=model_dir)
-            print(f"[Runner] Model saved to {model_dir}")
-        else:
-            print("[INFO] No Koopman model saved")
-
-        if save_model and model_dir is not None:
-            np.save(os.path.join(model_dir, "losses.npy"), self.losses)
-            np.save(os.path.join(model_dir, "vales.npy"), self.vales)
-            print(f"[Runner] Losses and vales saved to {model_dir}")
+        if save_model and save_model_dir is not None:
+            np.save(os.path.join(save_model_dir, "losses.npy"), self.losses)
+            np.save(os.path.join(save_model_dir, "vales.npy"), self.vales)
+            print(f"[Runner] Losses and vales saved to {save_model_dir}")
 
         # ----- compute fisher and save fisher info -----
         print("[INFO] Computing Fisher Information after training...")
@@ -406,15 +404,15 @@ class KoopmanRunner:
             fisher = self.ewc_model.compute_fisher(train_tensor, batch_size=64)
             self.ewc_model.fisher = fisher
             print("[INFO] Fisher matrix updated.")
-            if save_model and model_dir is not None:
-                self.ewc_model.save(model_dir=model_dir, task_id=task_id)
+            if save_model and save_model_dir is not None:
+                self.ewc_model.save(model_dir=save_model_dir, task_id=task_id)
         else:
             print("[INFO] No EWC model attached or invalid.")
 
     def test(
         self,
         dataset="val",
-        model_dir=None,
+        load_model_dir=None,
         show_plot=True,
         save_results=True,
         rollout_steps=1,
@@ -423,14 +421,14 @@ class KoopmanRunner:
         Test model on given dataset (train/val).
         Args:
             dataset: str, "train" or "val"
-            model_dir: str, path to load model
+            load_model_dir: str, path to load model
             show_plot: bool, whether to visualize trajectories
             save_results: bool, whether to save trajectory and metrics
             rollout_steps: int, number of steps for rollout prediction (>=1)
         """
         # ----- load model -----
-        if model_dir is not None:
-            self.model.load(model_dir=model_dir)
+        if load_model_dir is not None:
+            self.model.load(model_dir=load_model_dir)
         self.model.eval()
 
         # ----- select dataset -----
@@ -452,11 +450,11 @@ class KoopmanRunner:
                 a_t = batch[:, self.state_dim : self.state_dim + self.action_dim]
                 x_t1 = batch[:, -self.state_dim :]
 
-                # ----- 单步 or 多步预测 -----
+                # ----- Single-step or Multi-steps -----
                 if rollout_steps == 1:
                     pred_x_t1 = self.model(x_t, a_t, False)
                 else:
-                    # rollout N 步，输入是当前 state，动作来自数据
+                    # rollout is N-steps, input = state, action is from data
                     pred_x_t1 = []
                     cur_x = x_t
                     for step in range(rollout_steps):
@@ -465,7 +463,7 @@ class KoopmanRunner:
                         ]
                         cur_x = self.model(cur_x, cur_a, False)
                         pred_x_t1.append(cur_x)
-                    pred_x_t1 = pred_x_t1[-1]  # 取最后一步预测
+                    pred_x_t1 = pred_x_t1[-1]  # take last step prediction
 
                 # ----- loss & metrics -----
                 loss = self.loss_fn(pred_x_t1, x_t1)
@@ -475,14 +473,14 @@ class KoopmanRunner:
                 ).item() * batch.size(0)
                 n_samples += batch.size(0)
 
-                # ----- 保存轨迹 -----
+                # ----- save trajectory -----
                 traj.append(
                     torch.cat(
                         [x_t.cpu(), a_t.cpu(), x_t1.cpu(), pred_x_t1.cpu()], dim=1
                     ).numpy()
                 )
 
-        # ----- 结果统计 -----
+        # ----- Evaluation Metrics -----
         avg_loss = total_loss / n_samples
         avg_mae = total_mae / n_samples
         self.traj_np = np.concatenate(traj, axis=0)
@@ -490,21 +488,22 @@ class KoopmanRunner:
 
         print(f"[Test-{dataset}] Avg Loss: {avg_loss:.4f}, Avg MAE: {avg_mae:.4f}")
 
-        # ----- 保存结果 -----
-        if save_results and model_dir is not None:
-            np.save(os.path.join(model_dir, f"{dataset}_traj.npy"), self.traj_np)
-            with open(os.path.join(model_dir, f"{dataset}_metrics.txt"), "w") as f:
+        # ----- Save Results -----
+        if save_results and load_model_dir is not None:
+            np.save(os.path.join(load_model_dir, f"{dataset}_traj.npy"), self.traj_np)
+            with open(os.path.join(load_model_dir, f"{dataset}_metrics.txt"), "w") as f:
                 f.write(f"Avg Loss: {avg_loss}\nAvg MAE: {avg_mae}\n")
-            print(f"[Test-{dataset}] Results saved to {model_dir}")
+            print(f"[Test-{dataset}] Results saved to {load_model_dir}")
 
-        # ----- 可视化 -----
+        # ----- Visualization -----
         if show_plot:
             self.plot_trajectory()
 
     def plot_trajectory(self, use_smooth=True):
         """
-        绘制每个状态变量随时间的轨迹（真实 vs 预测）。
-        x 轴为时间步，y 轴为状态值。
+        Plot trajectory of each state w.r.t time. (Ground Truth v.s. Pred Traj).
+        X-axis: timestep
+        Y-axis: state
         """
         x_t = self.traj_np[:, : self.model.state_dim]  # True states
         pred_x_t1 = self.traj_np[:, -self.model.state_dim :]  # Predicted states
@@ -513,7 +512,7 @@ class KoopmanRunner:
         print("[DEBUG] pred_x_t1 shape:", pred_x_t1.shape)
         time_idx = np.arange(len(x_t))
         num_dims = self.model.state_dim
-        ncols = min(2, num_dims)  # 每行最多 2 个
+        ncols = min(2, num_dims)    # 2 in each row at most
         nrows = (num_dims + ncols - 1) // ncols
 
         plt.figure(figsize=(6 * ncols, 3 * nrows))
