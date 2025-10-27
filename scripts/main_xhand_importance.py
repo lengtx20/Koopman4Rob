@@ -6,8 +6,8 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch.nn import MSELoss
-from models.deep_koopman import Deep_Koopman
-from runner.koopman_runner import KoopmanRunner
+from koopman4rob.models.deep_koopman import DeepKoopman
+from koopman4rob.runner.koopman_runner import KoopmanRunner
 
 
 def load_data(mode, data_dir, ratio: float = 1.0):
@@ -80,7 +80,7 @@ def run(
 
     # ===== init model and algorithm ===== #
     loss_fn = MSELoss()
-    model = Deep_Koopman(
+    model = DeepKoopman(
         state_dim=25,  # XHAND has 25-dimensional state
         action_dim=8,  # 8-dimensional action
         hidden_sizes=[256] * 3,

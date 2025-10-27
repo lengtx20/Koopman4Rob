@@ -120,7 +120,7 @@ class Decoder(nn.Module):
         )
 
 
-class Deep_Koopman(nn.Module):
+class DeepKoopman(nn.Module):
     def __init__(
         self,
         state_dim,

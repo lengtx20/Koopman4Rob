@@ -4,7 +4,7 @@ Use together with Fisher Analyzer.
 """
 
 import argparse
-from models.ewc import Fisher_Analyzer
+from koopman4rob.models.ewc import Fisher_Analyzer
 
 
 def main():

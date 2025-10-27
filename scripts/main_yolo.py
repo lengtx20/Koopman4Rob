@@ -1,11 +1,11 @@
-"""Train data from resnet with Vision dataset using Deep Koopman model"""
+"""Train data from Manipulation with Vision dataset using Deep Koopman model"""
 
 import numpy as np
 import torch
 import torch.optim as optim
 from torch.nn import MSELoss
-from models.deep_koopman import Deep_Koopman
-from runner.koopman_runner import KoopmanRunner
+from koopman4rob.models.deep_koopman import DeepKoopman
+from koopman4rob.runner.koopman_runner import KoopmanRunner
 import os
 
 
@@ -18,19 +18,20 @@ def load_data(mode, data_dir, ratio: float = 0.8):
         traj.append(data)
 
     if mode == "test":
-        length = int(len(traj) * ratio)
-        train_data = np.concatenate(traj[: 64 - length], axis=0)
-        val_data = np.concatenate(traj[length:], axis=0)
-        print(
-            f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}"
-        )
+        train_traj = traj[: int(len(traj) * ratio)]
+        val_traj = traj[int(len(traj) * ratio) :]
+        train_traj = train_traj[:2]
+        train_data = np.concatenate(train_traj, axis=0)
+        val_data = np.concatenate(val_traj, axis=0)
+        print(f"[INFO] Train data shape: {train_data.shape}")
+        print(f"[INFO] Val data shape: {val_data.shape}")
     elif mode == "train":
-        length = int(len(traj) * ratio)
-        train_data = np.concatenate(traj[:length], axis=0)
-        val_data = np.concatenate(traj[length:], axis=0)
-        print(
-            f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}"
-        )
+        train_traj = traj[: int(len(traj) * ratio)]
+        val_traj = traj[int(len(traj) * ratio) :]
+        train_data = np.concatenate(train_traj, axis=0)
+        val_data = np.concatenate(val_traj, axis=0)
+        print(f"[INFO] Train data shape: {train_data.shape}")
+        print(f"[INFO] Val data shape: {val_data.shape}")
     else:
         raise ValueError(f"[ERROR] Unknown mode: {mode}")
     return train_data, val_data
@@ -49,11 +50,11 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print(f"[INFO] Loading Data from {data_dir}")
-    train_data, val_data = load_data(mode, data_dir)
+    train_data, val_data = load_data(mode, data_dir, ratio=0.8)
 
     # ===== init model and alg ===== #
     loss_fn = MSELoss()
-    model = Deep_Koopman(
+    model = DeepKoopman(
         state_dim=7,
         action_dim=512,
         hidden_sizes=[512] * 3,
@@ -65,7 +66,6 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
     ewc = None
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     runner = KoopmanRunner(
-        mode=mode,
         model=model,
         ewc_model=ewc,
         state_dim=7,
@@ -83,19 +83,9 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
 
     # ===== start main function ===== #
     if mode == "train":
-        if os.path.exists(model_dir):
-            idx = 0
-            while True:
-                new_dir = model_dir + f"{idx}"
-                if not os.path.exists(new_dir):
-                    model_dir = new_dir
-                    print(f"[INFO] Model dir exists. Change to {model_dir}")
-                    break
-                idx += 1
         os.makedirs(os.path.dirname(model_dir) or ".", exist_ok=True)
-
         runner.train(
-            max_epochs=150,
+            max_epochs=250,
             save_model=True,
             model_dir=model_dir,
             task_id=1,
@@ -115,9 +105,9 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
 
 if __name__ == "__main__":
     run(
-        mode="test",
-        data_dir="data/resnet/s_v_s1",
-        model_dir="logs/resnet_150",
+        mode="train",
+        data_dir="data/yolo/s_v_s1",
+        model_dir="logs/yolo",
         # fisher_path="/home/ltx/Koopman4Rob/logs/test/ewc_task1.pt",
         fisher_path=None,
     )

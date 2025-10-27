@@ -1,16 +1,42 @@
 """Train data from resnet with Vision dataset using Deep Koopman model"""
 
+import numpy as np
 import torch
 import torch.optim as optim
 from torch.nn import MSELoss
-from models.deep_koopman import Deep_Koopman
-from runner.koopman_runner import KoopmanRunner
+from koopman4rob.models.deep_koopman import DeepKoopman
+from koopman4rob.runner.koopman_runner import KoopmanRunner
 import os
 
 
-def run(
-    mode="test", data_dir=None, model_dir=None, fisher_path=None, blip2_model_dir=""
-):
+def load_data(mode, data_dir, ratio: float = 0.8):
+    traj = []
+    for i in range(64):
+        file_name = f"{i}.npy"
+        file_path = os.path.join(data_dir, file_name)
+        data = np.load(file_path)
+        traj.append(data)
+
+    if mode == "test":
+        length = int(len(traj) * ratio)
+        train_data = np.concatenate(traj[: 64 - length], axis=0)
+        val_data = np.concatenate(traj[length:], axis=0)
+        print(
+            f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}"
+        )
+    elif mode == "train":
+        length = int(len(traj) * ratio)
+        train_data = np.concatenate(traj[:length], axis=0)
+        val_data = np.concatenate(traj[length:], axis=0)
+        print(
+            f"[INFO] Train data shape: {train_data.shape}, Val data shape: {val_data.shape}"
+        )
+    else:
+        raise ValueError(f"[ERROR] Unknown mode: {mode}")
+    return train_data, val_data
+
+
+def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
     """
     mode:       select between train / test
     data_path:  path to the npy file.
@@ -22,14 +48,14 @@ def run(
     assert model_dir is not None, "Model path must be specified."
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    state_dim = 7
-    action_dim = 256
+    print(f"[INFO] Loading Data from {data_dir}")
+    train_data, val_data = load_data(mode, data_dir)
 
     # ===== init model and alg ===== #
     loss_fn = MSELoss()
-    model = Deep_Koopman(
-        state_dim=state_dim,
-        action_dim=action_dim,
+    model = DeepKoopman(
+        state_dim=7,
+        action_dim=512,
         hidden_sizes=[512] * 3,
         lifted_dim=256,
         seed=42,
@@ -42,10 +68,10 @@ def run(
         mode=mode,
         model=model,
         ewc_model=ewc,
-        state_dim=state_dim,
-        action_dim=action_dim,
-        train_data=None,
-        val_data=None,
+        state_dim=7,
+        action_dim=512,
+        train_data=train_data,
+        val_data=val_data,
         optimizer=optimizer,
         loss_fn=loss_fn,
         device=device,
@@ -53,8 +79,6 @@ def run(
         ewc_lambda=100.0,
         batch_size=64,
         num_workers=0,
-        data_root=data_dir,
-        model_path=blip2_model_dir,
     )
 
     # ===== start main function ===== #
@@ -90,42 +114,10 @@ def run(
 
 
 if __name__ == "__main__":
-    import argparse
-    import logging
-
-    logging.basicConfig(level=logging.INFO)
-
-    name = "blip2"
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--mode", type=str, default="test", help="select between train / test"
-    )
-    parser.add_argument(
-        "--data-dir", "-dd", type=str, help="data directory", required=True
-    )
-    parser.add_argument(
-        "--model-dir",
-        "-md",
-        type=str,
-        default=f"logs/{name}_150",
-        help="model directory",
-    )
-    parser.add_argument(
-        "--blip2-model-dir", "-bd", type=str, help="BLIP2 model directory", default=""
-    )
-    parser.add_argument(
-        "--fisher-path",
-        "-fp",
-        type=str,
-        default=None,
-        help="fisher information matrix path",
-    )
-    args = parser.parse_args()
-
     run(
-        mode=args.mode,
-        data_dir=args.data_dir,
-        model_dir=args.model_dir,
-        fisher_path=args.fisher_path,
-        blip2_model_dir=args.blip2_model_dir,
+        mode="test",
+        data_dir="data/resnet/s_v_s1",
+        model_dir="logs/resnet_150",
+        # fisher_path="/home/ltx/Koopman4Rob/logs/test/ewc_task1.pt",
+        fisher_path=None,
     )
