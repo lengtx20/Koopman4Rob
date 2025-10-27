@@ -375,6 +375,7 @@ class KoopmanRunner:
             range(config.train.iteration.max_epoch), desc="[Training]", position=0
         )
         start_time = time.monotonic()
+        start_timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         snapshots = defaultdict(list)
         manager.start()
         snap_count = Counter()
@@ -449,6 +450,10 @@ class KoopmanRunner:
                 return size_bytes
 
         metrics = {
+            "time_stamp": {
+                "start": start_timestamp,
+                "end": datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
+            },
             "model_size_mb": get_model_size(self.model),
             "total_time_minutes": total_time,
             "total_time_minutes_per_epoch": total_time_per_epoch,
@@ -466,12 +471,14 @@ class KoopmanRunner:
 
         self.writer.close()
 
-        # ----- save the last models and losses & vales -----
+        # ----- save the last models, losses & vales and create a symbol link for the best val_loss model -----
         if save_model:
             last_model_path = ckpt_dir / "last"
             last_model_path.mkdir(parents=True, exist_ok=True)
             self.model.save(model_dir=last_model_path)
             print(f"[Runner] Last model saved to {last_model_path}")
+            # shutil.copytree(best_model_path, ckpt_dir / "best")
+            # print(f"[Runner] Best model copied to {ckpt_dir / 'best'}")
             np.save(ckpt_dir / "losses.npy", np.array(self.losses))
             np.save(ckpt_dir / "vales.npy", np.array(self.vales))
             with open(ckpt_dir / "training_metrics.json", "w") as f:
@@ -635,7 +642,7 @@ class KoopmanRunner:
         plt.show()
 
     def infer(self):
-        from airbot_data_collection.basis import SystemMode
+        from airbot_data_collection.common.systems.basis import SystemMode
         from airbot_data_collection.common.environments.grouped import (
             GroupedEnvironment,
             GroupedEnvironmentConfig,
@@ -677,20 +684,7 @@ class KoopmanRunner:
             dataset.load()
             reset_action = next(iter(dataset[0]))[action_keys[0]]["data"].tolist()
         else:
-            reset_action = [
-                # -0.0085832,
-                # 0.18596932,
-                # -0.08869307,
-                # 0.08602273,
-                # -0.04520485,
-                # -0.09670405,
-                -0.08411535620689392,
-                -0.4709315598011017,
-                0.699816882610321,
-                -0.010872052982449532,
-                0.04901960864663124,
-                -0.03452353551983833,
-            ]
+            reset_action = []
         env = GroupedEnvironment(
             GroupedEnvironmentConfig(
                 components=SystemSensorComponentGroupsConfig(
@@ -703,7 +697,7 @@ class KoopmanRunner:
                     ],
                 ),
                 reset_action=GroupsSendActionConfig(
-                    groups=["/"],
+                    groups=["/"] if reset_action else [],
                     action_values=[reset_action],
                     modes=[SystemMode.RESETTING],
                 ),
