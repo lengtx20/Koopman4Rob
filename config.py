@@ -136,8 +136,7 @@ class TrainIterationConfig(BaseModel):
     Training will stop when any of the sufficient conditions are met or all necessary conditions are satisfied.
 
     Args:
-        patience (NonNegativeInt): Number of consecutive epochs with no improvement in the monitored
-            metric before early stopping is triggered. Set to 0 to disable early stopping.
+        patience (NonNegativeInt): Number of consecutive epochs with no improvement in the train or val loss before early stopping is triggered. Set to 0 to disable early stopping.
         max_epoch (NonNegativeInt): Maximum number of epochs allowed for training.
         min_epoch (NonNegativeInt): Minimum number of epochs that must be completed before any stopping
             condition (e.g., patience or loss thresholds) is evaluated.
@@ -271,6 +270,7 @@ class InferConfig(BaseModel):
     """
     show_image: bool = False
     image_transform: bool = False
+    feature_from_dataset: bool = True
 
 
 class ModelConfig(BaseModel):
@@ -322,9 +322,10 @@ class Config(CommonConfig):
             }
         },
         # test for one step prediction of the dataset
-        frequency=0,
+        frequency=100,
         obs_from_dataset=True,
         action_from_dataset=False,
+        feature_from_dataset=False,
         show_image=False,
     )
 

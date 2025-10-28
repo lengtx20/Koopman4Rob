@@ -781,18 +781,25 @@ class KoopmanRunner:
                         ep_ds = dataset[rollout]
                         sample_iter = iter(ep_ds)
                         print(f"[INFO] Dataset {ep_ds} loaded.")
-                        # path = (
-                        #     Path(f"{ep_ds.config.data_root.parent}_blip2_features")
-                        #     / ep_ds.config.data_root.name
-                        # )
-                        # print(f"[INFO] Preparing BLIP2 features at {path}...")
-                        # blip_dataset = McapFlatBuffersSampleDataset(
-                        #     McapFlatBuffersSampleDatasetConfig(
-                        #         data_root=path, keys=self.config.img_features_keys
-                        #     )
-                        # )
-                        # blip_dataset.load()
-                        # blip_iter = iter(blip_dataset)
+                        if infer_cfg.feature_from_dataset:
+                            from pathlib import Path
+                            from mcap_data_loader.datasets.mcap_dataset import (
+                                McapFlatBuffersSampleDataset,
+                                McapFlatBuffersSampleDatasetConfig,
+                            )
+
+                            path = (
+                                Path(f"{ep_ds.config.data_root.parent}_blip2_features")
+                                / ep_ds.config.data_root.name
+                            )
+                            print(f"[INFO] Preparing BLIP2 features at {path}...")
+                            blip_dataset = McapFlatBuffersSampleDataset(
+                                McapFlatBuffersSampleDatasetConfig(
+                                    data_root=path, keys=self.config.img_features_keys
+                                )
+                            )
+                            blip_dataset.load()
+                            blip_iter = iter(blip_dataset)
                     env.reset()
                     if input(f"Press Enter to start {rollout=}...") == "q":
                         break
@@ -821,7 +828,10 @@ class KoopmanRunner:
                             )
                             # print(f"{cur_x_t=}")
                             # print(f"{pred_x_t1=}")
-                            loss = torch.norm(cur_x_t - pred_x_t1) / np.pi * 180
+                            if step == 0:
+                                loss = torch.tensor(0.0)
+                            else:
+                                loss = torch.norm(cur_x_t - pred_x_t1) / np.pi * 180
                             print(f"RMSE: {loss} deg")
                             losses.append(loss.item())
                             if infer_cfg.open_loop_predict:
@@ -832,15 +842,14 @@ class KoopmanRunner:
                             # print(obs.keys())
                             # print("Processing features..")
                             features = {}
-                            if False:
-                                pass
-                                # blip2_obs = next(blip_iter)
-                                # for key in self.config.img_features_keys:
-                                #     features[key] = (
-                                #         torch.from_numpy(blip2_obs[key]["data"])
-                                #         .to(device=self.device, dtype=model_dtype)
-                                #         .unsqueeze(0)
-                                #     )
+                            if infer_cfg.feature_from_dataset:
+                                blip2_obs = next(blip_iter)
+                                for key in self.config.img_features_keys:
+                                    features[key] = (
+                                        torch.from_numpy(blip2_obs[key]["data"])
+                                        .to(device=self.device, dtype=model_dtype)
+                                        .unsqueeze(0)
+                                    )
                             else:
                                 for key in self.config.image_keys:
                                     img = obs[key]["data"]
@@ -892,6 +901,7 @@ class KoopmanRunner:
                         print(f"Rollout interrupted by user at {step=}, resetting...")
                     except StopIteration:
                         print("Rollout stopped since dataset reached end")
+                    losses = losses[1:]  # remove the first step loss (0.0)
                     mean_loss = statistics.mean(losses)
                     mean_std = statistics.stdev(losses) if len(losses) > 1 else 0.0
                     print(

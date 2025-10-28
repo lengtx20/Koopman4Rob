@@ -64,6 +64,7 @@ class IterationManager:
             )
             max_loss_key = f"max_{stage}_loss"
             flags[max_loss_key] = loss >= getattr(self._config, max_loss_key) > 0.0
+        # print(f"patience counter: {self._iter_counts['patience']}")
 
     def get_time_cost(self) -> float:
         return (time.monotonic() - self.start_time) / 60.0
