@@ -12,6 +12,7 @@ from mcap_data_loader.pipelines import NestedZip, NestedZipConfig, Merge, MergeC
 from typing import Tuple, List
 from config import Config
 from functools import partial
+from pprint import pprint
 import torch
 
 
@@ -106,18 +107,18 @@ def create_train_val_dataloader(config: Config):
             val = sample_datasets[train_num:]
         else:
             train, val = take_skip(sample_datasets, split[0], split[1])
-            # RearrangeType.rearrange(train, RearrangeType.SORT_STEM_DIGITAL)
-            # RearrangeType.rearrange(val, RearrangeType.SORT_STEM_DIGITAL)
-            # print(train), print(val)
+            RearrangeType.rearrange(train, RearrangeType.SORT_STEM_DIGITAL)
+            RearrangeType.rearrange(val, RearrangeType.SORT_STEM_DIGITAL)
         splited_datasets["train"].append(train)
         splited_datasets["val"].append(val)
+    pprint(splited_datasets)
     # check the names and lengths are matching
-    for key, value in splited_datasets.items():
-        if not all(len(v) == len(value[0]) for v in value):
+    for stage, datasets in splited_datasets.items():
+        if not all(len(v) == len(datasets[0]) for v in datasets):
             raise ValueError(
-                f"Dataset lengths do not match in {key}: {[len(v) for v in value]}"
+                f"Dataset lengths do not match in {stage}: {[len(v) for v in datasets]}"
             )
-        for sample_sets in zip(*value):
+        for sample_sets in zip(*datasets):
             sample_sets: Tuple[McapFlatBuffersSampleDataset, ...]
             name = sample_sets[0].config.data_root.name
             for sample_set in sample_sets:
@@ -125,6 +126,7 @@ def create_train_val_dataloader(config: Config):
                     raise ValueError(
                         f"Dataset names do not match: {sample_set.config.data_root.name} vs {name}"
                     )
-    train_loader = create_mcap_dataloader(config, splited_datasets["train"])
-    val_loader = create_mcap_dataloader(config, splited_datasets["val"])
-    return train_loader, val_loader
+    return [
+        create_mcap_dataloader(config, splited_datasets[key])
+        for key in ["train", "val"]
+    ]

@@ -655,32 +655,48 @@ class KoopmanRunner:
             V4L2CameraConfig,
         )
 
-        from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-        # from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+        # from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
+        from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 
         action_keys = self.config.robot_action_keys
-        use_dataset = self.config.data_dir is not None
+        data_dir = self.config.data_dir
+        use_dataset = data_dir is not None
         from mcap_data_loader.utils.pytorch import torch_to_numpy_dtype_dict
 
         if use_dataset:
             from mcap_data_loader.datasets.mcap_dataset import (
                 McapFlatBuffersEpisodeDataset,
-                McapFlatBuffersEpisodeDatasetConfig,
+                DataRearrangeConfig,
+                RearrangeType,
+                get_config_and_class_type,
+                to_episodic_sequence,
+                get_first_sample,
             )
             from mcap_data_loader.utils.av_coder import DecodeConfig
 
-            dataset = McapFlatBuffersEpisodeDataset(
-                McapFlatBuffersEpisodeDatasetConfig(
-                    data_root=self.config.data_dir,
+            config_cls, dataset_cls = get_config_and_class_type(data_dir)
+
+            dataset = dataset_cls(
+                config_cls(
+                    data_root=data_dir,
                     keys=self.config.image_keys + action_keys,
                     strict=False,
                     media_configs=[
                         DecodeConfig(mismatch_tolerance=5, frame_format="rgb24")
                     ],
+                    rearrange=DataRearrangeConfig(
+                        dataset=RearrangeType.SORT_STEM_DIGITAL
+                    )
+                    if dataset_cls is McapFlatBuffersEpisodeDataset
+                    else DataRearrangeConfig(),
                 )
             )
             dataset.load()
-            reset_action = next(iter(dataset[0]))[action_keys[0]]["data"].tolist()
+            dataset = to_episodic_sequence(dataset)
+            reset_action = get_first_sample(dataset)[action_keys[0]]["data"].tolist()
+            # McapFlatBuffersEpisodeDataset(
+
+            # )
         else:
             reset_action = []
         env = GroupedEnvironment(
@@ -703,6 +719,7 @@ class KoopmanRunner:
             )
         )
 
+        # TODO: allow change the env reset action
         if not env.configure():
             raise RuntimeError("Failed to configure the grouped system.")
 
@@ -743,6 +760,7 @@ class KoopmanRunner:
 
         transforms = [v2.ToImage()]
         if infer_cfg.image_transform:
+            print("[INFO] Using image data augmentation transforms.")
             transforms.extend(
                 [
                     v2.ColorJitter(brightness=(0.5, 1.5), contrast=(0.5, 1.5)),
@@ -760,7 +778,21 @@ class KoopmanRunner:
                     if max_rollouts > 0 and rollout > max_rollouts:
                         break
                     if use_dataset:
-                        sample_iter = iter(dataset[rollout])
+                        ep_ds = dataset[rollout]
+                        sample_iter = iter(ep_ds)
+                        print(f"[INFO] Dataset {ep_ds} loaded.")
+                        # path = (
+                        #     Path(f"{ep_ds.config.data_root.parent}_blip2_features")
+                        #     / ep_ds.config.data_root.name
+                        # )
+                        # print(f"[INFO] Preparing BLIP2 features at {path}...")
+                        # blip_dataset = McapFlatBuffersSampleDataset(
+                        #     McapFlatBuffersSampleDatasetConfig(
+                        #         data_root=path, keys=self.config.img_features_keys
+                        #     )
+                        # )
+                        # blip_dataset.load()
+                        # blip_iter = iter(blip_dataset)
                     env.reset()
                     if input(f"Press Enter to start {rollout=}...") == "q":
                         break
@@ -787,6 +819,8 @@ class KoopmanRunner:
                                 .to(device=self.device)
                                 .unsqueeze(0)
                             )
+                            # print(f"{cur_x_t=}")
+                            # print(f"{pred_x_t1=}")
                             loss = torch.norm(cur_x_t - pred_x_t1) / np.pi * 180
                             print(f"RMSE: {loss} deg")
                             losses.append(loss.item())
@@ -798,25 +832,46 @@ class KoopmanRunner:
                             # print(obs.keys())
                             # print("Processing features..")
                             features = {}
-                            for key in self.config.image_keys:
-                                img = obs[key]["data"]
-                                img = np.ones(img.shape)
-                                img: torch.Tensor = image_transform(img)
-                                if infer_cfg.show_image:
-                                    np_img = einops.rearrange(
-                                        img.cpu().float().numpy().astype(np.uint8),
-                                        "c h w -> h w c",
-                                    )
-                                    cv2.imshow(key, np_img[:, :, ::-1].copy())
-                                features[key] = extractor.process_image(img, prompt)[
-                                    "features_proj"
-                                ]
+                            if False:
+                                pass
+                                # blip2_obs = next(blip_iter)
+                                # for key in self.config.img_features_keys:
+                                #     features[key] = (
+                                #         torch.from_numpy(blip2_obs[key]["data"])
+                                #         .to(device=self.device, dtype=model_dtype)
+                                #         .unsqueeze(0)
+                                #     )
+                            else:
+                                for key in self.config.image_keys:
+                                    img = obs[key]["data"]
+                                    # raw_feature = extractor.process_image(img, prompt)[
+                                    #     "features_proj"
+                                    # ]
+                                    # img: torch.Tensor = image_transform(img)
+                                    features[key] = extractor.process_image(
+                                        img, prompt
+                                    )["features_proj"]
+                                    # print(
+                                    #     torch.norm(features[key] - raw_feature)
+                                    #     / torch.norm(raw_feature)
+                                    # )
+                                    if infer_cfg.show_image:
+                                        if isinstance(img, torch.Tensor):
+                                            np_img = einops.rearrange(
+                                                img.cpu()
+                                                .float()
+                                                .numpy()
+                                                .astype(np.uint8),
+                                                "c h w -> h w c",
+                                            )
+                                        else:
+                                            np_img = img
+                                        cv2.imshow(key, np_img[:, :, ::-1].copy())
                             if infer_cfg.show_image:
                                 cv2.waitKey(1)
-                            a_t = features[self.config.image_keys[0]]
+                            # TODO: support multiple image features
+                            a_t = features[key]
                             a_t = a_t.to(dtype=model_dtype)
-                            # print("a_t shape:", a_t.shape)
-                            # print("x_t shape:", x_t.shape)
                             # print("Predicting...")
                             pred_x_t1 = self.model(x_t, a_t, False)
                             if infer_cfg.action_from_dataset:
@@ -826,7 +881,6 @@ class KoopmanRunner:
                                 action.action_values = [
                                     pred_x_t1.squeeze(0).cpu().numpy().tolist()
                                 ]
-                            # print(f"Step {step} action: {action.action_values}")
                             if infer_cfg.send_action and not env.input(action):
                                 print("Failed to send action, resetting...")
                                 break

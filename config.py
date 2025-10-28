@@ -318,7 +318,7 @@ class Config(CommonConfig):
         extra_models={
             "blip2-itm-vit-g": {
                 "path": Path("pretrained_models/blip2-itm-vit-g"),
-                "prompt": "Open the drawer with the black handle",
+                "prompt": "The end effector of the robotic arm tries to get close to the QR code attached to the cabinet.",
             }
         },
         # test for one step prediction of the dataset

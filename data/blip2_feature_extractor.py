@@ -211,9 +211,7 @@ if __name__ == "__main__":
         "-prom",
         type=str,
         help="Prompt for feature extraction",
-        # default="Open the cabinet door",
-        default="Open the drawer with the black handle",
-        # default="Open the drawer with the black handle",
+        default="The end effector of the robotic arm tries to get close to the QR code attached to the cabinet.",
     )
     parser.add_argument(
         "--keys",
@@ -270,9 +268,7 @@ if __name__ == "__main__":
         for sample in tqdm(episode, desc="Processing samples", total=len(episode)):
             # pprint(sample)
             for key, value in sample.items():
-                features_dict = extractor.process_image(
-                    value["data"][:, :, ::-1].copy(), args.prompt
-                )
+                features_dict = extractor.process_image(value["data"], args.prompt)
                 for feature_key, features in features_dict.items():
                     # print(features.shape)
                     writer.add_float_array(
