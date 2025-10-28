@@ -5,7 +5,7 @@ from pydantic import (
     NonNegativeFloat,
     Field,
 )
-from typing import List, Optional, Literal, Any, Set, Dict
+from typing import List, Optional, Literal, Any, Set, Dict, Union, Tuple
 from functools import cache
 from pathlib import Path
 
@@ -250,6 +250,7 @@ class TrainConfig(BaseModel):
     iteration: TrainIterationConfig = Field(default_factory=TrainIterationConfig)
     snapshot: List[SnapshotConfig] = []
     save_model: SaveModelConfig = SaveModelConfig()
+    train_val_split: Union[float, Tuple[int, int]] = 0.8
 
 
 class InferConfig(BaseModel):
@@ -310,6 +311,7 @@ class Config(CommonConfig):
                 interval=1,
             ),
         ],
+        train_val_split=(2, 1),
     )
     test: TestConfig = TestConfig()
     infer: InferConfig = InferConfig(

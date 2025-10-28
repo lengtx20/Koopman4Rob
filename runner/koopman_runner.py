@@ -77,12 +77,7 @@ class KoopmanRunner:
             if config.data_dir:
                 from data.mcap_data_utils import create_train_val_dataloader
 
-                self.train_loader, self.val_loader = create_train_val_dataloader(
-                    config,
-                    batch_size,
-                    num_workers,
-                    0.8 if mode == "train" else 1.0,
-                )
+                self.train_loader, self.val_loader = create_train_val_dataloader(config)
             else:
                 self.train_loader = DataLoader(
                     KoopmanDataset(train_data),

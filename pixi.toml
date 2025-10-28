@@ -35,5 +35,5 @@ einops = "*"
 # typing_extensions = ">=4.15.0,<5"
 
 [pypi-dependencies]
-mcap-data-loader = { git = "https://github.com/OpenGHz/MCAP-DataLoader.git", rev = "e62ecd7db315248cdb0a51f68b160d542df43ef5" }
+mcap-data-loader = { git = "https://github.com/OpenGHz/MCAP-DataLoader.git", rev = "fd1f6a6436477a941a5ea2075e829e34a6298e8e" }
 typing_extensions = "==4.15.0"

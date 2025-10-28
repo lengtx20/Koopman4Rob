@@ -4,8 +4,10 @@ from mcap_data_loader.datasets.mcap_dataset import (
     SampleStamped,
     McapFlatBuffersEpisodeDataset,
     McapFlatBuffersEpisodeDatasetConfig,
+    DataRearrangeConfig,
+    RearrangeType,
 )
-from mcap_data_loader.utils.extra_itertools import Reusablizer, epairwise
+from mcap_data_loader.utils.extra_itertools import Reusablizer, epairwise, take_skip
 from mcap_data_loader.pipelines import NestedZip, NestedZipConfig, Merge, MergeConfig
 from typing import Tuple, List
 from config import Config
@@ -13,10 +15,8 @@ from functools import partial
 import torch
 
 
-def create_mcap_dataloader(
-    config: Config, datasets: list, batch_size: int, num_workers: int = 0, device=None
-):
-    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+def create_mcap_dataloader(config: Config, datasets: list):
+    device = config.device or ("cuda" if torch.cuda.is_available() else "cpu")
     dtype = torch.float32
     source_nodes = {}
     weights = {}
@@ -67,43 +67,50 @@ def create_mcap_dataloader(
             batched_list.append(sample_array)
         return torch.stack(batched_list)
 
-    node = nodes.Batcher(node, batch_size, False)
-    node = nodes.ParallelMapper(node, process_batched_sample, num_workers)
+    node = nodes.Batcher(node, config.batch_size, False)
+    node = nodes.ParallelMapper(node, process_batched_sample, config.num_workers)
     node = nodes.Prefetcher(node, 10, 1000)
     # node = nodes.PinMemory(node, "cuda", 1000)
     # node = nodes.Unbatcher(node)
     return nodes.Loader(node, True)
 
 
-def create_train_val_dataloader(
-    config: Config,
-    batch_size,
-    num_workers,
-    ratio: float = 0.8,
-    device=None,
-):
-    datasets = (
+def create_train_val_dataloader(config: Config):
+    com_cfg = {
+        "strict": False,
+        "rearrange": DataRearrangeConfig(dataset=RearrangeType.SORT_STEM_DIGITAL),
+    }
+    zipping_datasets = (
         McapFlatBuffersEpisodeDataset(
             McapFlatBuffersEpisodeDatasetConfig(
-                data_root=config.data_dir, keys=config.robot_action_keys, strict=False
+                data_root=config.data_dir, keys=config.robot_action_keys, **com_cfg
             )
         ),
         McapFlatBuffersEpisodeDataset(
             McapFlatBuffersEpisodeDatasetConfig(
                 data_root=f"{config.data_dir}_blip2_features",
                 keys=config.img_features_keys,
-                strict=False,
+                **com_cfg,
             )
         ),
     )
     splited_datasets = {"train": [], "val": []}
-    for dataset in datasets:
+    for dataset in zipping_datasets:
         dataset.load()
         sample_datasets = list(dataset.read_stream())
         num = len(sample_datasets)
-        train_num = int(num * ratio)
-        splited_datasets["train"].append(sample_datasets[:train_num])
-        splited_datasets["val"].append(sample_datasets[train_num:])
+        split = config.train.train_val_split
+        if isinstance(split, float):
+            train_num = int(num * split)
+            train = sample_datasets[:train_num]
+            val = sample_datasets[train_num:]
+        else:
+            train, val = take_skip(sample_datasets, split[0], split[1])
+            # RearrangeType.rearrange(train, RearrangeType.SORT_STEM_DIGITAL)
+            # RearrangeType.rearrange(val, RearrangeType.SORT_STEM_DIGITAL)
+            # print(train), print(val)
+        splited_datasets["train"].append(train)
+        splited_datasets["val"].append(val)
     # check the names and lengths are matching
     for key, value in splited_datasets.items():
         if not all(len(v) == len(value[0]) for v in value):
@@ -118,10 +125,6 @@ def create_train_val_dataloader(
                     raise ValueError(
                         f"Dataset names do not match: {sample_set.config.data_root.name} vs {name}"
                     )
-    train_loader = create_mcap_dataloader(
-        config, splited_datasets["train"], batch_size, num_workers, device
-    )
-    val_loader = create_mcap_dataloader(
-        config, splited_datasets["val"], batch_size, num_workers, device
-    )
+    train_loader = create_mcap_dataloader(config, splited_datasets["train"])
+    val_loader = create_mcap_dataloader(config, splited_datasets["val"])
     return train_loader, val_loader
