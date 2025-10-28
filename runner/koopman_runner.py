@@ -655,8 +655,8 @@ class KoopmanRunner:
             V4L2CameraConfig,
         )
 
-        # from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-        from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+        from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
+        # from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 
         action_keys = self.config.robot_action_keys
         data_dir = self.config.data_dir
@@ -902,17 +902,18 @@ class KoopmanRunner:
                     except StopIteration:
                         print("Rollout stopped since dataset reached end")
                     losses = losses[1:]  # remove the first step loss (0.0)
-                    mean_loss = statistics.mean(losses)
-                    mean_std = statistics.stdev(losses) if len(losses) > 1 else 0.0
-                    print(
-                        f"Rollout {rollout} loss mean: {mean_loss} std: {mean_std} deg"
-                    )
-                    all_losses.append(mean_loss)
+                    if losses:
+                        mean_loss = statistics.mean(losses)
+                        mean_std = statistics.stdev(losses) if len(losses) > 1 else 0.0
+                        print(
+                            f"Rollout {rollout} loss mean: {mean_loss} std: {mean_std} deg"
+                        )
+                        all_losses.append(mean_loss)
                     if infer_cfg.show_image:
                         cv2.destroyAllWindows()
             except KeyboardInterrupt:
                 print("Inference session ended by user.")
-            except StopIteration:
+            except (StopIteration, IndexError):
                 print("Inference session ended since dataset reached end.")
         if all_losses:
             overall_mean = statistics.mean(all_losses)

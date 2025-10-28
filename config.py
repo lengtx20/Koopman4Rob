@@ -322,7 +322,7 @@ class Config(CommonConfig):
             }
         },
         # test for one step prediction of the dataset
-        frequency=100,
+        frequency=0,
         obs_from_dataset=True,
         action_from_dataset=False,
         feature_from_dataset=False,
