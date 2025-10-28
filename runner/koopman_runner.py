@@ -17,6 +17,7 @@ from pprint import pprint
 from collections import defaultdict, Counter
 from itertools import count
 import statistics
+import shutil
 
 
 class KoopmanDataset(Dataset):
@@ -477,8 +478,10 @@ class KoopmanRunner:
             last_model_path.mkdir(parents=True, exist_ok=True)
             self.model.save(model_dir=last_model_path)
             print(f"[Runner] Last model saved to {last_model_path}")
-            # shutil.copytree(best_model_path, ckpt_dir / "best")
-            # print(f"[Runner] Best model copied to {ckpt_dir / 'best'}")
+            fifo_saver = improve_dict.get("val_loss", None)
+            if fifo_saver is not None:
+                shutil.copytree(fifo_saver.last_item, ckpt_dir / "best")
+                print(f"[Runner] Best model copied to {ckpt_dir / 'best'}")
             np.save(ckpt_dir / "losses.npy", np.array(self.losses))
             np.save(ckpt_dir / "vales.npy", np.array(self.vales))
             with open(ckpt_dir / "training_metrics.json", "w") as f:

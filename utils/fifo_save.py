@@ -21,3 +21,9 @@ class FIFOSave:
         item.mkdir(parents=True, exist_ok=True)
         self._deque.append(item)
         return to_remove
+
+    @property
+    def last_item(self) -> Optional[Path]:
+        if len(self._deque) == 0:
+            return None
+        return self._deque[-1]
