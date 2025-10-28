@@ -321,12 +321,17 @@ class Config(CommonConfig):
                 "prompt": "The end effector of the robotic arm tries to get close to the QR code attached to the cabinet.",
             }
         },
-        # test for one step prediction of the dataset
         frequency=0,
-        obs_from_dataset=True,
-        action_from_dataset=False,
-        feature_from_dataset=False,
         show_image=False,
+        # test for one step prediction of the dataset
+        # obs_from_dataset=True,
+        # action_from_dataset=False,
+        # feature_from_dataset=False,
+        # test for realtime continuous infering
+        obs_from_dataset=False,
+        feature_from_dataset=False,
+        action_from_dataset=False,
+        open_loop_predict=True,
     )
 
     def model_post_init(self, context):

@@ -707,7 +707,9 @@ class KoopmanRunner:
                     roles=["l", "o"],
                     instances=[
                         AIRBOTPlay(AIRBOTPlayConfig()),
-                        V4L2Camera(V4L2CameraConfig(camera_index=None)),
+                        V4L2Camera(
+                            V4L2CameraConfig(camera_index="usb-0000:00:14.0-11")
+                        ),
                     ],
                 ),
                 reset_action=GroupsSendActionConfig(
