@@ -655,8 +655,8 @@ class KoopmanRunner:
             V4L2CameraConfig,
         )
 
-        # from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-        from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+        from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
+        # from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 
         action_keys = self.config.robot_action_keys
         use_dataset = self.config.data_dir is not None

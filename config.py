@@ -259,8 +259,8 @@ class InferConfig(BaseModel):
     # TODO: use deriving structure for config
     extra_models: Dict[str, Dict] = {}
     """paths to extra models, e.g. vision backbones, for inference"""
-    obs_from_dataset: bool = True
-    action_from_dataset: bool = True
+    obs_from_dataset: bool = False
+    action_from_dataset: bool = False
     open_loop_predict: bool = False
     send_action: bool = True
     max_rollouts: NonNegativeInt = 0
@@ -323,6 +323,8 @@ class Config(CommonConfig):
         },
         # test for one step prediction of the dataset
         frequency=0,
+        obs_from_dataset=True,
+        action_from_dataset=False,
         show_image=False,
     )
 
