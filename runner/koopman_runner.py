@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import datetime
 import json
 import time
+import statistics
+import shutil
 from tqdm import tqdm
 from utils.utils import smooth_curve
 from utils.iter_manager import IterationManager
@@ -16,8 +18,6 @@ from config import Config
 from pprint import pprint
 from collections import defaultdict, Counter
 from itertools import count
-import statistics
-import shutil
 
 
 class KoopmanDataset(Dataset):
@@ -61,20 +61,20 @@ class KoopmanRunner:
         self.device = device
         self.normalize = normalize
         self.ewc_lambda = config.ewc_lambda
-        self.num_workers = config.num_workers
+        self.num_workers = config.data_loader.num_workers
         self.tb_log_dir = config.tb_log_dir
         self.config = config
 
         self.losses = []
         self.vales = []
 
-        batch_size = config.batch_size
+        batch_size = config.data_loader.batch_size
         mode = config.mode
-        num_workers = config.num_workers
+        num_workers = self.num_workers
 
         # dataset
         if config.mode != "infer":
-            if config.data_dir:
+            if config.datasets:
                 from data.mcap_data_utils import create_train_val_dataloader
 
                 self.train_loader, self.val_loader = create_train_val_dataloader(config)
@@ -454,7 +454,7 @@ class KoopmanRunner:
             "total_time_minutes": total_time,
             "total_time_minutes_per_epoch": total_time_per_epoch,
             "total_time_minutes_per_epoch_no_batch": total_time_per_epoch
-            * config.batch_size,
+            * config.data_loader.batch_size,
             "iteration": manager.records,
             "snapshots": {
                 "period": {

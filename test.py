@@ -1,4 +1,4 @@
-# from collections import Counter
+lis = [[1, 2, 3]]
 
-# for i in Counter():
-#     print(i)
+for zipped in zip(*lis):
+    print(zipped)

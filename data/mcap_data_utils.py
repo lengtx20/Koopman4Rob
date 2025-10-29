@@ -3,8 +3,6 @@ from mcap_data_loader.datasets.mcap_dataset import (
     McapFlatBuffersSampleDataset,
     SampleStamped,
     McapFlatBuffersEpisodeDataset,
-    McapFlatBuffersEpisodeDatasetConfig,
-    DataRearrangeConfig,
     RearrangeType,
 )
 from mcap_data_loader.utils.extra_itertools import Reusablizer, epairwise, take_skip
@@ -17,29 +15,33 @@ import torch
 
 
 def create_mcap_dataloader(config: Config, datasets: list):
-    device = config.device or ("cuda" if torch.cuda.is_available() else "cpu")
-    dtype = torch.float32
-    source_nodes = {}
-    weights = {}
-
+    dl_cfg = config.data_loader
+    dtype = getattr(torch, config.dtype)
+    # zipping the internal episodes of the datasets
     nested = NestedZip[McapFlatBuffersEpisodeDataset](NestedZipConfig(depth=1))(
         datasets
     )
-    for episodes in nested:
-        key = episodes[0].config.data_root.name
+    source_nodes = {}
+    weights = {}
+    for index, episodes in enumerate(nested):
+        # merge the zipped episodes
         merged = Merge(MergeConfig(method="ChainMap"))(episodes)
-        source_nodes[key] = nodes.IterableWrapper(
-            Reusablizer(partial(epairwise, gap=config.pair_gap, fill_with_last=True))(
+        source_node = nodes.IterableWrapper(
+            Reusablizer(partial(epairwise, gap=dl_cfg.pair_gap, fill_with_last=True))(
                 merged
             )
         )
-        weights[key] = 1.0
+        source_nodes[index] = source_node
+        weights[index] = dl_cfg.weights[index] if dl_cfg.weights else 1.0
 
-    node = nodes.MultiNodeWeightedSampler(
-        source_nodes,
-        weights,
-        nodes.StopCriteria.ALL_DATASETS_EXHAUSTED,
-    )
+    if len(source_nodes) == 1:
+        node = source_node
+    else:
+        node = nodes.MultiNodeWeightedSampler(
+            source_nodes,
+            weights,
+            nodes.StopCriteria.ALL_DATASETS_EXHAUSTED,
+        )
 
     def process_batched_sample(
         batched_samples: List[Tuple[SampleStamped, SampleStamped]],
@@ -51,54 +53,38 @@ def create_mcap_dataloader(config: Config, datasets: list):
             for s in sample:
                 tensor_sample = {}
                 for key, value in s.items():
-                    tensor_sample[key] = torch.from_numpy(value["data"]).to(
-                        device=device, dtype=dtype
-                    )
+                    tensor_sample[key] = torch.from_numpy(value["data"])
                 tensor_samples.append(tensor_sample)
             sample_array = torch.concatenate(
                 [
                     # state dim + action dim
                     tensor_samples[0][key]
-                    for key in config.robot_action_keys + config.img_features_keys
+                    for key in config.data_loader.states + config.data_loader.actions
                 ]
                 + [  # next state dim
-                    tensor_samples[1][key] for key in config.robot_action_keys
+                    tensor_samples[1][key] for key in config.data_loader.states
                 ]
-            ).to(dtype=torch.float32)
+            ).to(dtype=dtype, device=torch.device(config.device))
             batched_list.append(sample_array)
         return torch.stack(batched_list)
 
-    node = nodes.Batcher(node, config.batch_size, False)
-    node = nodes.ParallelMapper(node, process_batched_sample, config.num_workers)
-    node = nodes.Prefetcher(node, 10, 1000)
-    # node = nodes.PinMemory(node, "cuda", 1000)
-    # node = nodes.Unbatcher(node)
+    node = nodes.Batcher(node, dl_cfg.batch_size, False)
+    node = nodes.ParallelMapper(node, process_batched_sample, dl_cfg.num_workers)
+    if dl_cfg.prefetch_factor > 0:
+        node = nodes.Prefetcher(
+            node, dl_cfg.prefetch_factor, dl_cfg.prefetch_snapshot_frequency
+        )
+    if dl_cfg.pin_memory_device is not None:
+        node = nodes.PinMemory(
+            node, dl_cfg.pin_memory_device, dl_cfg.pin_memory_snapshot_frequency
+        )
     return nodes.Loader(node, True)
 
 
 def create_train_val_dataloader(config: Config):
-    com_cfg = {
-        "strict": False,
-        "rearrange": DataRearrangeConfig(dataset=RearrangeType.SORT_STEM_DIGITAL),
-    }
-    zipping_datasets = (
-        McapFlatBuffersEpisodeDataset(
-            McapFlatBuffersEpisodeDatasetConfig(
-                data_root=config.data_dir, keys=config.robot_action_keys, **com_cfg
-            )
-        ),
-        McapFlatBuffersEpisodeDataset(
-            McapFlatBuffersEpisodeDatasetConfig(
-                data_root=f"{config.data_dir}_blip2_features",
-                keys=config.img_features_keys,
-                **com_cfg,
-            )
-        ),
-    )
     splited_datasets = {"train": [], "val": []}
-    for dataset in zipping_datasets:
-        dataset.load()
-        sample_datasets = list(dataset.read_stream())
+    for dataset in config.datasets:
+        sample_datasets = list(dataset)
         num = len(sample_datasets)
         split = config.train.train_val_split
         if isinstance(split, float):

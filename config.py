@@ -3,61 +3,67 @@ from pydantic import (
     PositiveInt,
     NonNegativeInt,
     NonNegativeFloat,
+    ConfigDict,
     Field,
 )
 from typing import List, Optional, Literal, Any, Set, Dict, Union, Tuple
 from functools import cache
 from pathlib import Path
+from mcap_data_loader.utils.basic import NonIteratorIterable
 
 
-feature_suffix = "features_proj"
 IterUnit = Literal["epoch", "step", "sample", "minute"]
+
+
+class DataLoaderConfig(BaseModel):
+    """Configuration for data loader."""
+
+    states: List[str] = []
+    """List of state keys."""
+    actions: List[str] = []
+    """List of action keys."""
+    weights: List[str] = []
+    """List of weight keys for each episode."""
+    batch_size: PositiveInt = 1
+    """Batch size for data loading."""
+    num_workers: int = 0
+    """Number of workers for data loading. 0 means single-threaded."""
+    pair_gap: NonNegativeInt = 0
+    """Gap between paired samples in epairwise."""
+    prefetch_factor: NonNegativeInt = 0
+    """Number of samples to prefetch per worker."""
+    prefetch_snapshot_frequency: NonNegativeInt = 1
+    """Frequency (in number of samples) to take snapshots of the data loader."""
+    pin_memory_device: Optional[str] = None
+    """Device to pin memory to. If None, pin memory is not used. If set to "", defaults to "cuda" if available."""
+    pin_memory_snapshot_frequency: NonNegativeInt = 1
+    """Frequency (in number of samples) to take snapshots when using pin memory."""
 
 
 class CommonConfig(BaseModel):
     """Common configuration parameters.
     These configurations are applicable to both training and testing
-    but the values are not necessarily the same in both cases.
-    Args:
-        mode: Literal["test", "train"], mode of stage.
-        root_dir: Path, root directory for saving logs and checkpoints.
-        checkpoints_dir: Path, directory for saving model checkpoints.
-        checkpoint_path: Optional[Path], path to a specific model checkpoint.
-            If None, no checkpoint will be saved.
-        data_dir: Path, path to the data directory.
-        seed: int, random seed for reproducibility.
-        batch_size: PositiveInt, batch size for training/testing.
-        num_workers: int, number of workers for data loading.
-        robot_state_keys: List[str], list of keys for robot state.
-        robot_action_keys: List[str], list of keys for robot action.
-        img_features_keys: List[str], list of keys for image features.
-        pair_gap: NonNegativeInt, gap between paired samples.
-        ewc_model: Optional[Path], path to the EWC model checkpoint.
-        ewc_lambda: float, regularization strength for EWC.
-        tb_log_dir: Path, directory for TensorBoard logs.
-        device: str, device to use for computation (e.g., "cpu", "cuda:0").
     """
 
+    model_config = ConfigDict(validate_assignment=True)
+
     mode: Literal["train", "test", "infer"]
-    data_dir: Optional[Path] = None
+    """Mode of stage: 'train', 'test', or 'infer'."""
     root_dir: Path = Path("logs")
+    """Root directory for saving logs and checkpoints."""
     checkpoints_dir: Path = Path("checkpoints")
+    """Directory for saving model checkpoints."""
     checkpoint_path: Optional[Path] = Path("0")
+    """Path to a specific model checkpoint. If None, no checkpoint will be saved."""
     seed: int = 42
-    batch_size: PositiveInt = 64
-    num_workers: int = 0
-    robot_state_keys: List[str] = []
-    robot_action_keys: List[str] = [
-        "/follow/arm/joint_state/position",
-        # "/follow/eef/joint_state/position",
-    ]
-    image_keys: List[str] = ["/env_camera/color/image_raw"]
-    img_features_keys: List[str] = [f"{cam}/{feature_suffix}" for cam in image_keys]
-    pair_gap: NonNegativeInt = 0
+    """Random seed for reproducibility."""
+    device: str = ""
+    """Device to load tensors onto. If empty, will use "cuda" if available else "cpu"."""
+    dtype: str = "float32"
+    """Data type for tensors. E.g., 'float32', 'float16'."""
+    tb_log_dir: Path = Path("tensorboard")
     ewc_model: Optional[Path] = None
     ewc_lambda: float = 100.0
-    tb_log_dir: Path = Path("tensorboard")
-    device: str = ""
 
     def model_post_init(self, context):
         def process_path(
@@ -287,15 +293,14 @@ class ModelConfig(BaseModel):
 
 
 class Config(CommonConfig):
-    """Main configuration for the Koopman model.
-    Args:
-        model: ModelConfig, configuration for the model.
-        train: TrainConfig, configuration for training.
-        test: TestConfig, configuration for testing.
-        infer: InferConfig, configuration for inference.
-    """
+    """Main configuration"""
 
+    datasets: List[NonIteratorIterable] = Field(default=[], min_length=1)
+    """Configuration for the dataset."""
+    data_loader: DataLoaderConfig = DataLoaderConfig()
+    """Configuration for the data loader."""
     model: ModelConfig = ModelConfig()
+    """Configuration for the model."""
     train: TrainConfig = TrainConfig(
         iteration=TrainIterationConfig(
             max_train_time=20,
@@ -313,7 +318,9 @@ class Config(CommonConfig):
         ],
         train_val_split=(2, 1),
     )
+    """Configuration for training."""
     test: TestConfig = TestConfig()
+    """Configuration for testing."""
     infer: InferConfig = InferConfig(
         extra_models={
             "blip2-itm-vit-g": {
@@ -333,11 +340,12 @@ class Config(CommonConfig):
         action_from_dataset=False,
         open_loop_predict=True,
     )
+    """Configuration for inference."""
 
     def model_post_init(self, context):
         super().model_post_init(context)
         # TODO: use warming up to determine the state_dim and action_dim if 0
-        state_dim = 6 if len(self.robot_action_keys) == 1 else 7
+        state_dim = 6 if len(self.data_loader.states) == 1 else 7
         if self.model.state_dim == 0:
             self.model.state_dim = state_dim
         else:

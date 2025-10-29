@@ -1,0 +1,5 @@
+datasets:
+  _target_: configs.data.get_datasets
+data_loader:
+  _target_: configs.data.get_data_loader_config
+  batch_size: 64

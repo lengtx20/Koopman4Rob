@@ -8,11 +8,14 @@ from config import Config
 
 
 def run(config: Config):
-    device = (
-        torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    config.device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "cpu"
         if not config.device
-        else torch.device(config.device)
+        else config.device
     )
+    device = torch.device(config.device)
     model_cfg = config.model
     # ===== init model and alg ===== #
     loss_fn = config.train.loss_fn
@@ -27,6 +30,7 @@ def run(config: Config):
     )
     model.to_device(device)
     # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
+    # TODO: configure this, ref. DP project
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     runner = KoopmanRunner(model, None, None, optimizer, loss_fn, device, False, config)
 
@@ -63,12 +67,13 @@ if __name__ == "__main__":
     import hydra
     from hydra_zen import instantiate, store
 
-    config_name = "config"
+    config_name = "class_config"
     store(Config, name=config_name)
     store.add_to_hydra_store()
 
     # logging.basicConfig(level=logging.INFO)
-    config_path = None
+    config_path = "configs"
+    config_name = "config"
     config = None
 
     def convert(cfg):
@@ -77,4 +82,4 @@ if __name__ == "__main__":
 
     hydra.main(config_path or None, config_name, None)(convert)()
     if config:
-        run(config)
+        run(Config(**config))
