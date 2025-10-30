@@ -43,6 +43,16 @@ def create_mcap_dataloader(config: Config, datasets: list):
             nodes.StopCriteria.ALL_DATASETS_EXHAUSTED,
         )
 
+    # get the state and action dims
+    first_sample = next(iter(nodes.Loader(node, False)))
+    state_dim = sum(first_sample[0][key]["data"].shape[0] for key in dl_cfg.states)
+    action_dim = sum(first_sample[0][key]["data"].shape[0] for key in dl_cfg.actions)
+    print(f"[INFO] State dim: {state_dim}, Action dim: {action_dim}")
+    if config.model.state_dim == 0:
+        config.model.state_dim = state_dim
+    if config.model.action_dim == 0:
+        config.model.action_dim = action_dim
+
     def process_batched_sample(
         batched_samples: List[Tuple[SampleStamped, SampleStamped]],
     ) -> torch.Tensor:
@@ -78,7 +88,8 @@ def create_mcap_dataloader(config: Config, datasets: list):
         node = nodes.PinMemory(
             node, dl_cfg.pin_memory_device, dl_cfg.pin_memory_snapshot_frequency
         )
-    return nodes.Loader(node, True)
+    loader = nodes.Loader(node, dl_cfg.restart_on_stop_iteration)
+    return loader
 
 
 def create_train_val_dataloader(config: Config):

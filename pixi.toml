@@ -31,6 +31,7 @@ scipy = ">=1.10,<2"
 torchdata = ">=0.11.0,<0.12"
 transformers = ">=4.57.1,<5"
 einops = "*"
+class-resolver = "*"
 ## NOTE: Install typing_extensions via PyPI to avoid conda packaging issues in this env
 # typing_extensions = ">=4.15.0,<5"
 

@@ -3,3 +3,9 @@ datasets:
 data_loader:
   _target_: configs.data.get_data_loader_config
   batch_size: 64
+model:
+  hidden_sizes:
+    - 512
+    - 512
+    - 512
+  lifted_dim: 256

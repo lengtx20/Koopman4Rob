@@ -18,6 +18,8 @@ from config import Config
 from pprint import pprint
 from collections import defaultdict, Counter
 from itertools import count
+from models.deep_koopman import Deep_Koopman
+from torch import optim
 
 
 class KoopmanDataset(Dataset):
@@ -32,34 +34,25 @@ class KoopmanDataset(Dataset):
 
 
 class KoopmanRunner:
-    def __init__(
-        self,
-        model,
-        train_data,
-        val_data,
-        optimizer,
-        loss_fn,
-        device,
-        normalize=False,
-        config: Config = None,
-    ):
-        """
-        model:      Deep Koopman model
-        normalize:  Current normalization relies on pre-defined mean and std value.
-                    This is to assure the consistency of the model.
-        """
-        # params
+    def __init__(self, config: Config, train_data, val_data):
+        config.device = (
+            "cuda"
+            if torch.cuda.is_available()
+            else "cpu"
+            if not config.device
+            else config.device
+        )
+        self.device = torch.device(config.device)
+        # ===== init model and alg ===== #
+        loss_fn = config.train.loss_fn
+        if isinstance(loss_fn, str):
+            loss_fn = getattr(torch.nn, loss_fn)()
+        self.loss_fn = loss_fn
         self.mode = config.mode
-        self.model = model.to(device)
         self.ewc_model = config.ewc_model
-        self.state_dim = config.model.state_dim
-        self.action_dim = config.model.action_dim
         self.train_data = train_data
         self.val_data = val_data
-        self.optimizer = optimizer
-        self.loss_fn = loss_fn
-        self.device = device
-        self.normalize = normalize
+        self.normalize = config.data_loader.normalize
         self.ewc_lambda = config.ewc_lambda
         self.num_workers = config.data_loader.num_workers
         self.tb_log_dir = config.tb_log_dir
@@ -69,33 +62,43 @@ class KoopmanRunner:
         self.vales = []
 
         batch_size = config.data_loader.batch_size
-        mode = config.mode
         num_workers = self.num_workers
 
         # dataset
-        if config.mode != "infer":
-            if config.datasets:
-                from data.mcap_data_utils import create_train_val_dataloader
+        if config.datasets:
+            from data.mcap_data_utils import create_train_val_dataloader
 
-                self.train_loader, self.val_loader = create_train_val_dataloader(config)
-            else:
-                self.train_loader = DataLoader(
-                    KoopmanDataset(train_data),
+            self.train_loader, self.val_loader = create_train_val_dataloader(config)
+        elif config.mode != "infer":
+            self.train_loader = DataLoader(
+                KoopmanDataset(train_data),
+                batch_size=batch_size,
+                shuffle=(True and config.mode == "train"),
+                num_workers=num_workers,
+            )
+            self.val_loader = (
+                DataLoader(
+                    KoopmanDataset(val_data),
                     batch_size=batch_size,
-                    shuffle=(True and mode == "train"),
+                    shuffle=False,
                     num_workers=num_workers,
                 )
-                self.val_loader = (
-                    DataLoader(
-                        KoopmanDataset(val_data),
-                        batch_size=batch_size,
-                        shuffle=False,
-                        num_workers=num_workers,
-                    )
-                    if val_data is not None
-                    else None
-                )
-
+                if val_data is not None
+                else None
+            )
+        print(config.model)
+        model = Deep_Koopman(
+            **config.model.model_dump(),
+            seed=config.seed,
+        )
+        model.to_device(config.device)
+        # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
+        # TODO: configure this, ref. DP project
+        optimizer = optim.Adam(model.parameters(), lr=1e-4)
+        self.optimizer = optimizer
+        self.model = model
+        self.state_dim = config.model.state_dim
+        self.action_dim = config.model.action_dim
         # normalization (TODO)
         if self.normalize:
             self.state_mean = np.array(
@@ -499,13 +502,8 @@ class KoopmanRunner:
         else:
             print("[INFO] No EWC model attached or invalid.")
 
-    def test(self, dataset="val"):
-        """
-        Test model on given dataset (train/val).
-        Args:
-            dataset: str, "train" or "val"
-            config: Config, configuration object containing test settings
-        """
+    def test(self, dataset="train"):
+        """Test model on given dataset (train/val)."""
         # ----- load model -----
         config = self.config
         model_dir = config.checkpoint_path
@@ -691,7 +689,6 @@ class KoopmanRunner:
                     else DataRearrangeConfig(),
                 )
             )
-            dataset.load()
             dataset = to_episodic_sequence(dataset)
             reset_action = get_first_sample(dataset)[action_keys[0]]["data"].tolist()
             # McapFlatBuffersEpisodeDataset(
@@ -924,3 +921,6 @@ class KoopmanRunner:
                 f"Overall inference mean loss: {overall_mean}, std: {overall_std} deg, over {len(all_losses)} rollouts."
             )
         env.shutdown()
+
+    def run(self, stage: str):
+        return getattr(self, stage)()

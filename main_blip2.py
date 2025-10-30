@@ -1,44 +1,18 @@
 """Train data from resnet with Vision dataset using Deep Koopman model"""
 
-import torch
-import torch.optim as optim
-from models.deep_koopman import Deep_Koopman
 from runner.koopman_runner import KoopmanRunner
 from config import Config
 
 
 def run(config: Config):
-    config.device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "cpu"
-        if not config.device
-        else config.device
-    )
-    device = torch.device(config.device)
-    model_cfg = config.model
-    # ===== init model and alg ===== #
-    loss_fn = config.train.loss_fn
-    if isinstance(loss_fn, str):
-        loss_fn = getattr(torch.nn, loss_fn)()
-    model = Deep_Koopman(
-        state_dim=model_cfg.state_dim,
-        action_dim=model_cfg.action_dim,
-        hidden_sizes=model_cfg.hidden_sizes,
-        lifted_dim=model_cfg.lifted_dim,
-        seed=config.seed,
-    )
-    model.to_device(device)
-    # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
-    # TODO: configure this, ref. DP project
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    runner = KoopmanRunner(model, None, None, optimizer, loss_fn, device, False, config)
+    runner = KoopmanRunner(config, None, None)
 
     # ===== start main function ===== #
     model_dir = config.checkpoint_path
     mode = config.mode
     print(f"[INFO] Mode: {mode}. Model dir: {model_dir}")
     if mode == "train":
+        # automatically change model dir if exists
         if model_dir.exists():
             idx = 0
             while True:
@@ -54,13 +28,7 @@ def run(config: Config):
                 idx += 1
         model_dir.mkdir(parents=True, exist_ok=True)
         config.checkpoint_path = model_dir
-        runner.train()
-    elif mode == "test":
-        runner.test("train")
-    elif mode == "infer":
-        runner.infer()
-    else:
-        raise ValueError(f"[ERROR] Unknown mode: {mode}")
+    runner.run(mode)
 
 
 if __name__ == "__main__":

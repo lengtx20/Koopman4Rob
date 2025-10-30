@@ -10,3 +10,4 @@ mcap-data-loader @ git+https://github.com/OpenGHz/MCAP-DataLoader.git
 torchdata>=0.10.0
 transformers==4.57.0
 einops
+class-resolver

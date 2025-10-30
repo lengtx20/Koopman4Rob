@@ -4,19 +4,7 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F  # noqa: F401
-
-
-def get_activation(name: str):
-    return {
-        "relu": nn.ReLU(),
-        "sigmoid": nn.Sigmoid(),
-        "tanh": nn.Tanh(),
-        "swish": nn.SiLU(),
-        "elu": nn.ELU(),
-        "mish": nn.Mish(),
-        "linear": nn.Identity(),
-    }[name]
+from class_resolver.contrib.torch import activation_resolver
 
 
 class Encoder(nn.Module):
@@ -48,7 +36,7 @@ class Encoder(nn.Module):
         for i, (in_dim, out_dim) in enumerate(zip(self.sizes[:-1], self.sizes[1:])):
             layers.append(nn.Linear(in_dim, out_dim, bias=(not_linear or i == last_i)))
             if not_linear and i != last_i:
-                layers.append(get_activation(activation))
+                layers.append(activation_resolver.make(activation))
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -96,7 +84,7 @@ class Decoder(nn.Module):
                     nn.Linear(in_dim, out_dim, bias=(not_linear or i == last_i))
                 )
                 if not_linear and i != last_i:
-                    layers.append(get_activation(activation))
+                    layers.append(activation_resolver.make(activation))
             self.layers = nn.Sequential(*layers)
 
     def forward(self, z, get_action=False):
@@ -130,7 +118,6 @@ class Deep_Koopman(nn.Module):
         activation="relu",
         include_iden_state=True,
         iden_decoder=True,
-        requires_grad=True,
         seed=None,
     ):
         """
@@ -151,7 +138,6 @@ class Deep_Koopman(nn.Module):
         self.activation = activation
         self.include_iden_state = include_iden_state
         self.iden_decoder = iden_decoder
-        self.requires_grad = requires_grad
 
         self.encoder = Encoder(
             state_dim,
@@ -171,10 +157,6 @@ class Deep_Koopman(nn.Module):
             iden_decoder,
         )
         self.init_matrix()
-
-        for param in self.parameters():
-            # print(type(param), param.size())
-            param.requires_grad = requires_grad
 
     def set_seed(self, seed):
         random.seed(seed)

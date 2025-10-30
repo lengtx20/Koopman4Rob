@@ -18,9 +18,9 @@ IterUnit = Literal["epoch", "step", "sample", "minute"]
 class DataLoaderConfig(BaseModel):
     """Configuration for data loader."""
 
-    states: List[str] = []
+    states: List[str] = Field(min_length=1)
     """List of state keys."""
-    actions: List[str] = []
+    actions: List[str] = Field(min_length=1)
     """List of action keys."""
     weights: List[str] = []
     """List of weight keys for each episode."""
@@ -38,6 +38,10 @@ class DataLoaderConfig(BaseModel):
     """Device to pin memory to. If None, pin memory is not used. If set to "", defaults to "cuda" if available."""
     pin_memory_snapshot_frequency: NonNegativeInt = 1
     """Frequency (in number of samples) to take snapshots when using pin memory."""
+    restart_on_stop_iteration: bool = True
+    """Whether to restart the data loader when StopIteration is encountered."""
+    normalize: bool = False
+    """Whether to normalize the data."""
 
 
 class CommonConfig(BaseModel):
@@ -140,51 +144,46 @@ class TrainIterationConfig(BaseModel):
     This class defines various stopping and continuation criteria for a training loop.
     Any criterion set to its default "no limit" value (typically 0 or 0.0) is effectively disabled.
     Training will stop when any of the sufficient conditions are met or all necessary conditions are satisfied.
-
-    Args:
-        patience (NonNegativeInt): Number of consecutive epochs with no improvement in the train or val loss before early stopping is triggered. Set to 0 to disable early stopping.
-        max_epoch (NonNegativeInt): Maximum number of epochs allowed for training.
-        min_epoch (NonNegativeInt): Minimum number of epochs that must be completed before any stopping
-            condition (e.g., patience or loss thresholds) is evaluated.
-        max_step (NonNegativeInt): Maximum number of training steps (batches processed) allowed.
-        min_step (NonNegativeInt): Minimum number of training steps that must be completed before stopping
-            conditions are evaluated.
-        max_sample (NonNegativeInt): Maximum number of training samples processed (across all epochs).
-        min_sample (NonNegativeInt): Minimum number of training samples that must be processed before stopping
-            conditions are evaluated.
-        max_time (NonNegativeFloat): Maximum wall-clock training and validation time in minutes. Training stops once exceeded.
-            Set to 0.0 for no time limit.
-        min_time (NonNegativeFloat): Minimum training and validation time in minutes that must elapse before any stopping
-            condition is considered.
-        max_train_time (NonNegativeFloat): Maximum training time in minutes (excluding validation). Training stops once exceeded.
-        min_train_time (NonNegativeFloat): Minimum training time in minutes that must elapse before any stopping condition is considered.
-        max_train_loss (NonNegativeFloat): Upper bound on training loss; training stops if loss exceeds this value.
-        min_train_loss (NonNegativeFloat): Lower bound on training loss; training stops once loss drops below this value.
-        max_val_loss (NonNegativeFloat): Upper bound on validation loss; training stops if validation loss exceeds this value.
-        min_val_loss (NonNegativeFloat): Lower bound on validation loss; training stops once validation loss drops below this value.
-        conditions (KeyConditionConfig): Additional structured stopping conditions, typically mapping metric names
-            to comparison criteria (e.g., "val_acc >= 0.95"). Invalid or unsupported metric keys will raise a ValueError.
-
-    Raises:
-        ValueError: If invalid keys are provided in the `conditions` configuration.
     """
 
     patience: NonNegativeInt = 0
+    """Number of consecutive epochs with no improvement in the train or val loss before early stopping is triggered.
+    Set to 0 to disable early stopping."""
     max_epoch: NonNegativeInt = 0
+    """Maximum number of epochs allowed for training."""
     min_epoch: NonNegativeInt = 0
+    """Minimum number of epochs that must be completed before any stopping
+    condition (e.g., patience or loss thresholds) is evaluated."""
     max_step: NonNegativeInt = 0
+    """Maximum number of training steps (batches processed) allowed."""
     min_step: NonNegativeInt = 0
+    """Minimum number of training steps that must be completed before stopping
+    conditions are evaluated."""
     max_sample: NonNegativeInt = 0
+    """Maximum number of training samples processed (across all epochs)."""
     min_sample: NonNegativeInt = 0
+    """Minimum number of training samples that must be processed before stopping
+    conditions are evaluated."""
     max_time: NonNegativeFloat = 0.0
+    """Maximum wall-clock training and validation time in minutes. Training stops once exceeded.
+    Set to 0.0 for no time limit."""
     min_time: NonNegativeFloat = 0.0
+    """Minimum training and validation time in minutes that must elapse before any stopping
+    condition is considered."""
     max_train_time: NonNegativeFloat = 0.0
+    """Maximum training time in minutes (excluding validation). Training stops once exceeded."""
     min_train_time: NonNegativeFloat = 0.0
+    """Minimum training time in minutes that must elapse before any stopping condition is considered."""
     max_train_loss: NonNegativeFloat = 0.0
+    """Upper bound on training loss; training stops if loss exceeds this value."""
     min_train_loss: NonNegativeFloat = 0.0
+    """Lower bound on training loss; training will not stop if loss drops below this value."""
     max_val_loss: NonNegativeFloat = 0.0
+    """Upper bound on validation loss; training stops if validation loss exceeds this value."""
     min_val_loss: NonNegativeFloat = 0.0
+    """Lower bound on validation loss; training will not stop if validation loss drops below this value."""
     conditions: KeyConditionConfig = KeyConditionConfig()
+    """Configuration for stopping conditions."""
 
     def model_post_init(self, context):
         valid_keys = self.get_valid_keys()
@@ -215,21 +214,17 @@ class TrainIterationConfig(BaseModel):
 
 
 class SaveModelConfig(BaseModel):
-    """Configuration for saving the model.
-    Args:
-    """
+    """Configuration for saving the model."""
 
     period: Optional[IntermittentConfig] = None
-    on_improve: List[str] = ["val_loss"]
+    """Configuration for periodic saving of the model."""
+    on_improve: List[Literal["train_loss", "val_loss"]] = ["val_loss"]
+    """Saves the model when the specified metrics improve."""
     maximum: List[NonNegativeInt] = [5]
+    """Maximum number of saved models for each metric in on_improve."""
 
     def model_post_init(self, context):
-        improve_keys = {"train_loss", "val_loss"}
-        if not set(self.on_improve).issubset(improve_keys):
-            raise ValueError(
-                f"Invalid on_improve keys: {set(self.on_improve) - improve_keys}"
-            )
-        if not len(self.on_improve) == len(self.maximum):
+        if len(self.on_improve) != len(self.maximum):
             raise ValueError("Length of on_improve and maximum must be the same")
 
 
@@ -265,41 +260,56 @@ class InferConfig(BaseModel):
     extra_models: Dict[str, Dict] = {}
     """paths to extra models, e.g. vision backbones, for inference"""
     obs_from_dataset: bool = False
+    """Whether to use observations from the dataset during inference."""
     action_from_dataset: bool = False
+    """Whether to use actions from the dataset during inference."""
     open_loop_predict: bool = False
+    """Whether to perform open-loop prediction during inference."""
     send_action: bool = True
+    """Whether to send action commands during inference."""
     max_rollouts: NonNegativeInt = 0
+    """Maximum number of rollouts to perform during inference."""
     max_steps: NonNegativeInt = 0
+    """Maximum number of steps to perform during inference."""
     frequency: int = 0
     """The frequency (in steps) to send action commands.
     0 means wait for input after every step. Negative means no limit.
     """
     show_image: bool = False
+    """Whether to display images during inference."""
     image_transform: bool = False
+    """Whether to apply image transformations during inference."""
     feature_from_dataset: bool = True
+    """Whether to use features from the dataset during inference."""
 
 
 class ModelConfig(BaseModel):
-    """Configuration for the model.
-    Args:
-        hidden_sizes: List[int], list of hidden layer sizes.
-        lifted_dim: PositiveInt, dimension of the lifted space (>=1).
-    """
+    """Configuration for the model."""
 
-    state_dim: int = 0
-    action_dim: int = 256
-    hidden_sizes: List[int] = [512, 512, 512]
-    lifted_dim: PositiveInt = 256
+    state_dim: NonNegativeInt = 0
+    """Dimension of the system state. If 0, will be inferred from data."""
+    action_dim: NonNegativeInt = 0
+    """Dimension of the control input. If 0, will be inferred from data."""
+    hidden_sizes: List[PositiveInt]
+    """Sizes of hidden layers in the model."""
+    lifted_dim: PositiveInt
+    """Dimension of the lifted space."""
+    activation: str = "relu"
+    """Activation function to use in the model."""
+    include_iden_state: bool = True
+    """Whether to include identity state in the model."""
+    iden_decoder: bool = True
+    """Whether to use identity decoder in the model."""
 
 
 class Config(CommonConfig):
     """Main configuration"""
 
-    datasets: List[NonIteratorIterable] = Field(default=[], min_length=1)
+    datasets: List[NonIteratorIterable] = Field(min_length=1)
     """Configuration for the dataset."""
-    data_loader: DataLoaderConfig = DataLoaderConfig()
+    data_loader: DataLoaderConfig
     """Configuration for the data loader."""
-    model: ModelConfig = ModelConfig()
+    model: ModelConfig
     """Configuration for the model."""
     train: TrainConfig = TrainConfig(
         iteration=TrainIterationConfig(
@@ -341,15 +351,3 @@ class Config(CommonConfig):
         open_loop_predict=True,
     )
     """Configuration for inference."""
-
-    def model_post_init(self, context):
-        super().model_post_init(context)
-        # TODO: use warming up to determine the state_dim and action_dim if 0
-        state_dim = 6 if len(self.data_loader.states) == 1 else 7
-        if self.model.state_dim == 0:
-            self.model.state_dim = state_dim
-        else:
-            assert self.model.state_dim == state_dim, (
-                f"Configured state_dim {self.model.state_dim} does not match "
-                f"the data state_dim {state_dim}"
-            )
