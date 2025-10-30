@@ -86,12 +86,27 @@ class KoopmanRunner:
                 if val_data is not None
                 else None
             )
-        print(config.model)
-        model = Deep_Koopman(
-            **config.model.model_dump(),
-            seed=config.seed,
-        )
-        model.to_device(config.device)
+
+        def create_model():
+            return Deep_Koopman(
+                **config.model.model_dump(),
+                seed=config.seed,
+            )
+
+        if self.mode == "train":
+            model = create_model()
+        else:
+            model_dir = config.checkpoint_path
+            try:
+                model = Deep_Koopman.load_from_checkpoint(model_dir=model_dir)
+            except Exception as e:
+                print(
+                    "[Warning] Failed to load model from checkpoint using load_from_checkpoint:",
+                    e,
+                )
+                model = create_model()
+                model.load(model_dir=model_dir)
+        model.to_device(self.device)
         # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
         # TODO: configure this, ref. DP project
         optimizer = optim.Adam(model.parameters(), lr=1e-4)
@@ -509,7 +524,6 @@ class KoopmanRunner:
         model_dir = config.checkpoint_path
         test_config = config.test
         rollout_steps = test_config.rollout_steps
-        self.model.load(model_dir=model_dir)
         self.model.eval()
 
         # ----- select dataset -----
@@ -727,8 +741,6 @@ class KoopmanRunner:
             action_values=[[]],
             modes=[SystemMode.SAMPLING],
         )
-        # ----- load model -----
-        self.model.load(model_dir=self.config.checkpoint_path)
         self.model.eval()
         model_dtype = next(self.model.parameters()).dtype
 

@@ -4,6 +4,8 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
+import inspect
+import json
 from class_resolver.contrib.torch import activation_resolver
 
 
@@ -128,6 +130,7 @@ class Deep_Koopman(nn.Module):
         activation: for the network
         include_iden_state: let the lifted vector to have iden state (first part of the vector)
         """
+        self.save_hyperparameters()
         super().__init__()
         if seed is not None:
             self.set_seed(seed)
@@ -157,6 +160,16 @@ class Deep_Koopman(nn.Module):
             iden_decoder,
         )
         self.init_matrix()
+
+    def save_hyperparameters(self):
+        frame = inspect.currentframe().f_back
+        sig = inspect.signature(self.__class__.__init__)
+        local_vars = frame.f_locals
+        hparams = {}
+        for param_name in sig.parameters:
+            if param_name in local_vars and param_name not in ("self", "__class__"):
+                hparams[param_name] = local_vars[param_name]
+        self.hparams = hparams
 
     def set_seed(self, seed):
         random.seed(seed)
@@ -223,6 +236,7 @@ class Deep_Koopman(nn.Module):
         torch.save(self.B.data, model_dir / "B.pth")
         if not self.iden_decoder:
             torch.save(self.decoder.state_dict(), model_dir / "decoder.pth")
+        json.dump(self.hparams, open(model_dir / "hparams.json", "w"))
 
     def load(self, model_dir):
         """Load weights while preserving the current device and dtype."""
@@ -240,6 +254,13 @@ class Deep_Koopman(nn.Module):
         if not self.iden_decoder:
             decoder_state = torch.load(model_dir / "decoder.pth", map_location=device)
             self.decoder.load_state_dict(decoder_state)
+
+    @classmethod
+    def load_from_checkpoint(cls, model_dir):
+        hparams = json.load(open(model_dir / "hparams.json", "r"))
+        model = cls(**hparams)
+        model.load(model_dir)
+        return model
 
     def __repr__(self):
         return (
