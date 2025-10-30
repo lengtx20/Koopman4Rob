@@ -9,3 +9,14 @@ model:
     - 512
     - 512
   lifted_dim: 256
+train:
+  iteration:
+    max_train_time: 20 # minutes
+    patience: 250 # epochs
+    max_epoch: 5000
+    min_val_loss: 0.00045
+    min_train_time: 20
+  snapshot:
+    - keys: ["train_loss", "val_loss", "min_train_loss", "min_val_loss"]
+      interval: 1
+  train_val_split: [2, 1]

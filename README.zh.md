@@ -9,7 +9,7 @@ pip3 install -r requirements.txt
 
 ## 配置
 
-在 `configs/config.yaml` 中配置各种参数，全部可配置参数请参考 `config.py`中的各种配置类。
+在 `configs/config.yaml` 中配置各种参数，全部可配置参数请参考 `config.py`中的各种配置类（符合hydra规范）。
 
 ### 数据集加载
 
@@ -29,3 +29,31 @@ datasets = [dataset1, dataset2]
 ### 模型配置
 
 模型的可配置参数位于配置文件中的`model`字段，其中`state_dim`和`action_dim`分别对应系统状态和控制输入的维度，默认通过数据进行推断，故省略配置。
+
+
+### 训练配置
+
+训练相关的配置位于配置文件中的`train`字段，详细说明可参考`config.py`中`TrainConfig`类的注释。
+
+
+## 训练
+
+```bash
+python3 main_blip2.py +mode=train
+```
+
+可以通过命令行参数覆盖配置文件中的参数（符合hydra规范），例如修改`batch_size`：
+
+```bash
+python3 main_blip2.py +mode=train +data_loader.batch_size=128
+```
+
+训练可以随时通过`Ctrl+C`中断，模型检查点会自动保存到`logs/checkpoints`目录下。
+
+## 测试
+
+```bash
+python3 main_blip2.py +mode=test +checkpoint_path=14/best
+```
+其中`checkpoint_path`指定要加载的模型检查点路径，相对于`logs/checkpoints`目录。
+请注意修改配置文件中的数据集配置以加载测试数据集。

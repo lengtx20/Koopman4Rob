@@ -49,8 +49,6 @@ class CommonConfig(BaseModel):
     These configurations are applicable to both training and testing
     """
 
-    model_config = ConfigDict(validate_assignment=True)
-
     mode: Literal["train", "test", "infer"]
     """Mode of stage: 'train', 'test', or 'infer'."""
     root_dir: Path = Path("logs")
@@ -146,6 +144,8 @@ class TrainIterationConfig(BaseModel):
     Training will stop when any of the sufficient conditions are met or all necessary conditions are satisfied.
     """
 
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+
     patience: NonNegativeInt = 0
     """Number of consecutive epochs with no improvement in the train or val loss before early stopping is triggered.
     Set to 0 to disable early stopping."""
@@ -229,32 +229,39 @@ class SaveModelConfig(BaseModel):
 
 
 class TrainConfig(BaseModel):
-    """Configuration for training.
-    Args:
-        task_id: PositiveInt, identifier for the training task.
-        fisher_path: Optional[Path], path to save/load Fisher information matrix for EWC.
-        threshold_mode: Optional[Literal["neural_ratio", "ewc_loss"]], mode for EWC thresholding.
-        ewc_threshold: float, threshold value for EWC regularization.
-        ewc_regularization: bool, whether to apply EWC regularization during training.
-        loss_fn: Any, loss function to use during training.
-        iteration: TrainIterationConfig, configuration for training iteration.
-        snapshot: List[SnapshotConfig], list of snapshot configurations.
-    """
+    """Configuration for training."""
+
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
     task_id: PositiveInt = 1
+    """Identifier for the training task."""
     fisher_path: Optional[Path] = None
+    """Path to save/load Fisher information matrix for EWC."""
     threshold_mode: Optional[Literal["neural_ratio", "ewc_loss"]] = None
+    """Mode for EWC thresholding."""
     ewc_threshold: float = 1.0
+    """Threshold value for EWC regularization."""
     ewc_regularization: bool = False
+    """Whether to apply EWC regularization during training."""
     loss_fn: Any = "MSELoss"
+    """Loss function to use during training."""
     iteration: TrainIterationConfig = Field(default_factory=TrainIterationConfig)
+    """Configuration for training iteration."""
     snapshot: List[SnapshotConfig] = []
+    """List of snapshot configurations."""
     save_model: SaveModelConfig = SaveModelConfig()
+    """Configuration for saving the model."""
     train_val_split: Union[float, Tuple[int, int]] = 0.8
+    """Train/validation datasets split configuration.
+    If float, represents the proportion of data to use for training.
+    If tuple, represents the (train_step, val_step). This means that `train_step` data points are taken from the `episode` list, followed by `val_step` data points, and so on. The final ratio of the training set to the validation set is approximately `train_step:val_step`. This method is suitable for repeatedly collecting data N times under the same settings, then changing to the next setting and continuing to collect data. After traversing M settings, there are a total of N * M episodes. During training, this partitioning method ensures that the validation set covers all different settings.
+    """
 
 
 class InferConfig(BaseModel):
     """Configuration for inference."""
+
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
     # TODO: use deriving structure for config
     extra_models: Dict[str, Dict] = {}
@@ -286,6 +293,8 @@ class InferConfig(BaseModel):
 class ModelConfig(BaseModel):
     """Configuration for the model."""
 
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+
     state_dim: NonNegativeInt = 0
     """Dimension of the system state. If 0, will be inferred from data."""
     action_dim: NonNegativeInt = 0
@@ -305,29 +314,15 @@ class ModelConfig(BaseModel):
 class Config(CommonConfig):
     """Main configuration"""
 
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+
     datasets: List[NonIteratorIterable] = Field(min_length=1)
     """Configuration for the dataset."""
     data_loader: DataLoaderConfig
     """Configuration for the data loader."""
     model: ModelConfig
     """Configuration for the model."""
-    train: TrainConfig = TrainConfig(
-        iteration=TrainIterationConfig(
-            max_train_time=20,
-            patience=250,
-            max_epoch=5000,
-            min_val_loss=0.00045,
-            # ensure at least 20 minutes training
-            min_train_time=20,
-        ),
-        snapshot=[
-            SnapshotConfig(
-                keys={"train_loss", "val_loss", "min_train_loss", "min_val_loss"},
-                interval=1,
-            ),
-        ],
-        train_val_split=(2, 1),
-    )
+    train: TrainConfig = TrainConfig()
     """Configuration for training."""
     test: TestConfig = TestConfig()
     """Configuration for testing."""
