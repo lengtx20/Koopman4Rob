@@ -116,6 +116,8 @@ class Interactor(InteractorBasis):
 
     def add_first_batch(self, batch: DictBatch):
         print(f"{list(batch.keys())=}")
+        if length := len(batch["cur_state"]) != 1:
+            raise ValueError(f"Interactor only supports batch size of 1. Got {length}.")
         if batch:
             reset_action = batch["cur_state"][0].tolist()
         else:
