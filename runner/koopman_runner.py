@@ -5,11 +5,11 @@ import torch
 import datetime
 import json
 import time
-import statistics
 import shutil
 from tqdm import tqdm
 from utils.iter_manager import IterationManager
 from utils.fifo_save import FIFOSave
+from utils.utils import process_mse_losses
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
 from config import Config
@@ -18,7 +18,7 @@ from collections import defaultdict, Counter
 from itertools import count
 from models.deep_koopman import Deep_Koopman
 from torch import optim
-from typing import Optional
+from typing import Optional, Callable, Any
 from mcap_data_loader.utils.extra_itertools import first_recursive
 
 
@@ -43,7 +43,7 @@ class KoopmanRunner:
             else "cpu"
         )
         self.device = torch.device(config.device)
-        self.loss_fn = config.loss_fn
+        self.loss_fn: Callable[[Any, Any], torch.Tensor] = config.loss_fn
         self.mode = config.mode
         self.ewc_model = config.ewc_model
         self.train_data = train_data
@@ -567,51 +567,49 @@ class KoopmanRunner:
                         break
                     if use_data_loader:
                         ep_iter = iter(data_loader[rollout])
-                    if input(f"Press Enter to start {rollout=}...") == "q":
-                        break
+                    if infer_cfg.rollout_wait is not None:
+                        if (
+                            input(f"Press Enter to start {rollout=} or `q` to quit...")
+                            == "q"
+                        ):
+                            break
                     try:
                         for step in count():
                             max_steps = infer_cfg.max_steps
                             if max_steps > 0 and step > max_steps:
                                 break
                             batch_data = next(ep_iter) if use_data_loader else {}
-                            if step == 0 or not use_data_loader:
-                                loss = torch.tensor(0.0)
-                            else:
-                                loss = self.loss_fn(prediction, batch_data)
-                            print(f"RMSE: {torch.sqrt(loss) * 180 / np.pi} deg")
-                            losses.append(loss.item())
                             # print("Predicting...")
                             prediction = self.model(
                                 interactor.get_model_input(prediction, batch_data)
                             )
                             interactor.update(prediction, batch_data)
+                            loss = self.loss_fn(prediction, batch_data)
+                            losses.append(loss.item())
+                            print(f"RMSE: {torch.sqrt(loss) * 180 / np.pi} deg")
                             if dt > 0:
                                 time.sleep(dt)
                             elif dt == 0:
                                 input("Step done. Press Enter to continue...")
                     except KeyboardInterrupt:
                         print(f"Rollout interrupted by user at {step=}, resetting...")
+                        if infer_cfg.rollout_wait is None:
+                            input("Press Enter to continue...")
                     except StopIteration:
                         print("Rollout stopped since dataset reached end")
-                    losses = losses[1:]  # remove the first step loss (0.0)
                     if losses:
-                        mean_loss = statistics.mean(losses)
-                        mean_std = statistics.stdev(losses) if len(losses) > 1 else 0.0
-                        print(
-                            f"Rollout {rollout} loss mean: {mean_loss} std: {mean_std} deg"
-                        )
-                        all_losses.append(mean_loss)
+                        loss_stats = process_mse_losses(losses)
+                        loss_stats["rollout"] = rollout
+                        pprint(loss_stats)
+                        all_losses.append(loss_stats["mse"]["mean"])
             except KeyboardInterrupt:
                 print("Inference session ended by user.")
             except (StopIteration, IndexError):
                 print("Inference session ended since dataset reached end.")
         if all_losses:
-            overall_mean = statistics.mean(all_losses)
-            overall_std = statistics.stdev(all_losses) if len(all_losses) > 1 else 0.0
-            print(
-                f"Overall inference mean loss: {overall_mean}, std: {overall_std} deg, over {len(all_losses)} rollouts."
-            )
+            loss_stats = process_mse_losses(all_losses)
+            loss_stats["rollout"] = "overall"
+            pprint(loss_stats)
         return interactor.shutdown()
 
     def run(self, stage: str):

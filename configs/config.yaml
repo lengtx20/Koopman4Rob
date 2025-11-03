@@ -26,4 +26,5 @@ train:
 loss_fn:
   _target_: configs.data.LossCalculator
 infer:
-  frequency: 0
+  frequency: -1
+  rollout_wait: null

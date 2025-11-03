@@ -92,7 +92,7 @@ class BatchProcessor:
 
 def create_dataloader(
     config: Config, datasets: list
-) -> Union[nodes.Loader, Dict[int, nodes.Loader]]:
+) -> Union[nodes.Loader, List[nodes.Loader]]:
     dl_cfg = config.data_loader
     batch_processor = BatchProcessor(config.dtype, config.device, dl_cfg.stack)
     # zipping the internal episodes of the datasets
@@ -125,7 +125,7 @@ def create_dataloader(
             )
         }
 
-    all_loaders = {}
+    all_loaders = []
     for index, base_node in indexed_nodes.items():
         if dl_cfg.prefetch_factor > 0:
             node = nodes.Prefetcher(
@@ -147,7 +147,7 @@ def create_dataloader(
             #     node, dl_cfg.pin_memory_device, dl_cfg.pin_memory_snapshot_frequency
             # )
         loader = nodes.Loader(node, dl_cfg.restart_on_stop_iteration)
-        all_loaders[index] = loader
+        all_loaders.append(loader)
     return all_loaders[0] if config.mode != "infer" else all_loaders
 
 

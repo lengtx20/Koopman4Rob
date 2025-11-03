@@ -266,6 +266,7 @@ class InferConfig(BaseModel):
     """The frequency (in steps) to send action commands.
     0 means wait for any input after every step. Negative means no limit.
     """
+    rollout_wait: Any = "input"
 
 
 class ModelConfig(BaseModel):
