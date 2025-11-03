@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 
 
-all_keys = {}
+all_cat_keys = {}
 
 
 def _concat_values(values):
@@ -21,7 +21,7 @@ def _concat_values(values):
 
 def get_datasets(data_name):
     print(f"Loading datasets for {data_name}...")
-    global all_keys
+    global all_cat_keys
 
     base_root = Path(f"mcap_data/{data_name}")
     root_dir = base_root if base_root.is_dir() else base_root.parent
@@ -31,7 +31,7 @@ def get_datasets(data_name):
     )
     feature_suffix = "features_proj"
     image_keys = ["/env_camera/color/image_raw"]
-    all_keys = {
+    all_cat_keys = {
         "state": {base_root: ["/follow/arm/joint_state/position"]},
         "action": {feature_root: [f"{cam}/{feature_suffix}" for cam in image_keys]},
     }
@@ -39,9 +39,10 @@ def get_datasets(data_name):
         "strict": False,
         "rearrange": DataRearrangeConfig(dataset=RearrangeType.SORT_STEM_DIGITAL),
     }
+    other_keys = {base_root: image_keys}
     print(f"{base_root=}, {feature_root=}")
     datasets = []
-    for key_dict in all_keys.values():
+    for key_dict in all_cat_keys.values():
         for data_root in tuple(key_dict.keys()):
             if Path(data_root).exists():
                 config_cls, dataset_cls = get_config_and_class_type(data_root)
@@ -49,7 +50,10 @@ def get_datasets(data_name):
                     to_episodic_sequence(
                         dataset_cls(
                             config_cls(
-                                data_root=data_root, keys=key_dict[data_root], **common
+                                data_root=data_root,
+                                keys=key_dict[data_root]
+                                + other_keys.get(data_root, []),
+                                **common,
                             )
                         )
                     )
@@ -67,7 +71,7 @@ def get_data_loader_config(**kwargs) -> DataLoaderConfig:
     stack = {}
     cur_stack_no_index = {}
     for i, prefix in enumerate(["cur_", "next_"]):
-        for input_key, value in all_keys.items():
+        for input_key, value in all_cat_keys.items():
             cat_key = f"{prefix}{input_key}"
             # skip action for next_
             if i > 0 and input_key == "action":

@@ -22,7 +22,7 @@ from airbot_data_collection.common.devices.cameras.mock import (
 from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 from pydantic import BaseModel
 from config import Config
-from collections import defaultdict, ChainMap
+from collections import ChainMap
 from data.mcap_data_utils import BatchProcessor, DictBatch
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
 from interactor import InteractorBasis
@@ -52,11 +52,7 @@ class ExtractorConfig(BaseModel):
 class InteractorConfig(BaseModel):
     """Configuration for the interactor between the model and the environment."""
 
-    extractor: ExtractorConfig = ExtractorConfig(
-        model_path=Path("pretrained_models/blip2-itm-vit-g"),
-        prompt="The end effector of the robotic arm tries to get close to the QR code attached to the cabinet.",
-        enable=False,
-    )
+    extractor: ExtractorConfig
     open_loop_predict: bool = False
     """Whether to perform open-loop prediction during inference."""
     """Configuration for the feature extractor."""
@@ -64,30 +60,6 @@ class InteractorConfig(BaseModel):
     """Whether to use actions from the data loader during inference.
     If False, actions will be taken from the model."""
     model_input_from: Literal["env", "data_loader"] = "env"
-    # batch_priority: int = 0
-    # """The priority of the data batch for the interactor."""
-    # sources: Dict = {
-    #     "env": ["cur_state"],  # real state
-    #     "prediction": ["cur_action"],  # open loop control
-    # }
-    # sources: Dict = {
-    #     "batch": ["cur_action", "cur_state"],  # infer on datasets
-    # }
-    # sources: Dict = {
-    #     "batch": ["cur_state"],
-    #     "extractor": ["cur_action"],
-    # }
-    # TODO: use deriving structure for config
-    # extra_models: Dict[str, Dict] = {}
-    # """paths to extra models, e.g. vision backbones, for inference"""
-    # observation_from_dataset: bool = False
-    # """Whether to use observations from the data loader during inference.
-    # If False, observations will be taken from the environment."""
-    # action_from_dataset: bool = False
-    # """Whether to use actions from the data loader during inference.
-    # If False, actions will be taken from the model."""
-    # send_action: bool = True
-    # """Whether to send action commands during inference."""
     # show_image: bool = False
     # """Whether to display images during inference."""
     # image_transform: bool = False
@@ -99,33 +71,47 @@ class Interactor(InteractorBasis):
         self.config = config
 
     def add_config(self, config: Config):
-        stack_plain = defaultdict(list)
-        for cat_key, keys in config.data_loader.stack.items():
+        stack_dl = config.data_loader.stack
+        stack_env = {}
+        for cat_key, keys in stack_dl.items():
             if "next" in cat_key:
                 continue
+            stack_env[cat_key] = []
             for key in keys:
                 _, raw_key = key.split("/", 1)
-                stack_plain[cat_key].append(raw_key)
+                stack_env[cat_key].append(raw_key)
         self.use_extractor = self.config.extractor.enable
         if self.use_extractor:
             self.extractor = Blip2ImageFeatureExtractor(
                 model_path=self.config.extractor.model_path
             )
             self.extractor.load_model()
-            stack_plain.pop("cur_action")
-        torch_stack = {key: stack_plain[key] for key in ("cur_action",)}
-        pprint(f"Interactor plain_stack:\n{stack_plain}")
-        pprint(f"Interactor torch_stack:\n{torch_stack}")
+            stack_based = (
+                stack_dl if self.config.model_input_from == "data_loader" else stack_env
+            )
+            torch_cat_keys = ("cur_action",)
+            torch_stack = {key: stack_based[key] for key in torch_cat_keys}
+            for key in torch_cat_keys:
+                stack_env.pop(key, None)
+            pprint(f"DataLoader stack:\n{stack_dl}")
+            pprint(f"Interactor torch_stack:\n{torch_stack}")
+        pprint(f"Interactor plain_stack:\n{stack_env}")
         self._np_batcher = BatchProcessor(
-            config.dtype, config.device, stack_plain, "numpy"
+            config.dtype, config.device, stack_env, "numpy"
         )
         self._torch_batcher = BatchProcessor(
             config.dtype, config.device, torch_stack, "torch"
         )
         self._torch_dtype = self._torch_batcher.torch_dtype
         self._device = self._torch_batcher.device
-        self.from_keys = ["/env_camera/color/image_raw"]
-        self.to_keys = [f"{key}_features" for key in self.from_keys]
+        image_keys = ["/env_camera/color/image_raw"]
+        self.from_keys = (
+            image_keys
+            if self.config.model_input_from == "env"
+            else [f"0{key}" for key in image_keys]
+        )
+        self.to_keys = [f"{key}/features_proj" for key in self.from_keys]
+        print(f"Extractor from_keys: {self.from_keys}, to_keys: {self.to_keys}")
         self._shared_config = config
 
     def add_first_batch(self, batch: DictBatch):
@@ -206,6 +192,7 @@ class Interactor(InteractorBasis):
                         data[from_key][0], self.config.extractor.prompt
                     )["features_proj"].squeeze(0)
                 }
+            # print(f"{features.keys()=}")
             batched_features = self._torch_batcher([features])
             return ChainMap(batched_features, data)
         return data
@@ -216,6 +203,11 @@ class Interactor(InteractorBasis):
 
 def get_interactor() -> Interactor:
     interactor_cfg = InteractorConfig(
+        extractor=ExtractorConfig(
+            model_path=Path("pretrained_models/blip2-itm-vit-g"),
+            prompt="The end effector of the robotic arm tries to get close to the QR code attached to the cabinet.",
+            enable=True,
+        ),
         open_loop_predict=False,
         action_from="data_loader",
         model_input_from="data_loader",

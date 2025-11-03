@@ -76,7 +76,7 @@ class BatchProcessor:
             for key in self.keys_to_stack:
                 batched[key][i] = sample[key]["data"]
             for key in keys_no_stack:
-                batched[key].append(sample[key])
+                batched[key].append(sample[key]["data"])
         # stack and move to device
         # TODO: use multi-treaded pin_memory and use a new cuda stream to copy asynchronously
         # TODO: test the performance vs tensor-dict
