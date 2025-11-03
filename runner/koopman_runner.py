@@ -352,7 +352,7 @@ class KoopmanRunner:
             if stage == "val":
                 manager.update_val_epoch(avg_loss, time.monotonic() - start_time_)
             no_grad.__exit__(None, None, None)
-        if stage != "infer":
+        if stage != "test":
             ckpt_dir = self.config.checkpoint_path
             save_model = ckpt_dir is not None
             if save_model and manager.is_loss_improved(stage):
@@ -530,7 +530,7 @@ class KoopmanRunner:
 
         start_time = time.monotonic()
         # ----- computing loss -----
-        avg_loss = self.iter_loader("infer")
+        avg_loss = self.iter_loader("test")
         # ----- summary -----
         avg_rloss = np.sqrt(avg_loss)
         avg_rloss_deg = avg_rloss / np.pi * 180
@@ -544,7 +544,6 @@ class KoopmanRunner:
 
         # ----- save the results -----
         if test_cfg.save_results:
-            np.save(model_dir / f"{self.mode}_traj.npy", self.traj_np)
             with open(model_dir / f"{self.mode}_metrics.json", "w") as f:
                 json.dump(metrics_dict, f, indent=4)
             print(f"[Test-{self.mode}] Results saved to {model_dir}")
