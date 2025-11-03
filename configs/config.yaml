@@ -4,6 +4,8 @@ datasets:
 data_loader:
   _target_: configs.data.get_data_loader_config
   batch_size: 64
+interactor:
+  _target_: configs.inter.get_interactor
 model:
   hidden_sizes:
     - 512
@@ -25,5 +27,3 @@ loss_fn:
   _target_: configs.data.LossCalculator
 infer:
   frequency: 0
-interactor:
-  _target_: configs.inter.get_interactor

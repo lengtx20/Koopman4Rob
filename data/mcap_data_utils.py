@@ -148,17 +148,6 @@ def create_dataloader(
             # )
         loader = nodes.Loader(node, dl_cfg.restart_on_stop_iteration)
         all_loaders[index] = loader
-
-    # get the state and action dims
-    # first_sample = next(iter(nodes.Loader(indexed_nodes[0], False)))
-    # state_dim = sum(first_sample[0][key]["data"].shape[0] for key in dl_cfg.stack)
-    # action_dim = sum(first_sample[0][key]["data"].shape[0] for key in dl_cfg.actions_)
-    # print(f"[INFO] State dim: {state_dim}, Action dim: {action_dim}")
-    # if config.model.state_dim == 0:
-    #     config.model.state_dim = state_dim
-    # if config.model.action_dim == 0:
-    #     config.model.action_dim = action_dim
-
     return all_loaders[0] if config.mode != "infer" else all_loaders
 
 

@@ -20,6 +20,7 @@ from models.deep_koopman import Deep_Koopman
 from torch import optim
 from typing import Optional
 from configs.inter import Interactor
+from mcap_data_loader.utils.extra_itertools import first_recursive
 
 
 class KoopmanDataset(Dataset):
@@ -36,15 +37,13 @@ class KoopmanDataset(Dataset):
 class KoopmanRunner:
     def __init__(self, config: Config, train_data, val_data):
         config.device = (
-            "cuda"
+            config.device
+            if config.device
+            else "cuda"
             if torch.cuda.is_available()
             else "cpu"
-            if not config.device
-            else config.device
         )
         self.device = torch.device(config.device)
-        # ===== init model and alg ===== #
-
         self.loss_fn = config.loss_fn
         self.mode = config.mode
         self.ewc_model = config.ewc_model
@@ -67,6 +66,14 @@ class KoopmanRunner:
             from data.mcap_data_utils import create_dataloaders
 
             self._data_loaders = create_dataloaders(config)
+            interactor: Interactor = self.config.interactor
+            interactor.add_config(self.config)
+            interactor.add_first_batch(
+                first_recursive(
+                    self._data_loaders.values(), 3 if self.mode == "infer" else 2
+                )
+            )
+
         elif config.mode != "infer":
             train_loader = DataLoader(
                 KoopmanDataset(train_data),
@@ -550,10 +557,7 @@ class KoopmanRunner:
         data_loader = self._data_loaders.get(self.mode, None)
         use_data_loader = data_loader is not None
         infer_cfg = self.config.infer
-
-        interactor: Interactor = self.config.interactor
-        interactor.add_config(self.config)
-        interactor.add_first_batch(next(iter(data_loader[0])))
+        interactor = self.config.interactor
 
         freq = infer_cfg.frequency
         dt = 1 / freq if freq != 0 else 0

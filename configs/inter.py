@@ -125,6 +125,7 @@ class Interactor:
         self._device = self._torch_batcher.device
         self.from_keys = ["/env_camera/color/image_raw"]
         self.to_keys = [f"{key}_features" for key in self.from_keys]
+        self._shared_config = config
 
     def add_first_batch(self, batch: DictBatch):
         print(f"{list(batch.keys())=}")
@@ -160,6 +161,15 @@ class Interactor:
             action_values=[[]],
             modes=[SystemMode.SAMPLING],
         )
+        # get the state and action dims
+        state_dim = batch["cur_state"].shape[1]
+        action_dim = batch["cur_action"].shape[1]
+        print(f"[INFO] State dim: {state_dim}, Action dim: {action_dim}")
+        config = self._shared_config
+        if config.model.state_dim == 0:
+            config.model.state_dim = state_dim
+        if config.model.action_dim == 0:
+            config.model.action_dim = action_dim
 
     def _send_action(self, action: list):
         self._action.action_values[0] = action
