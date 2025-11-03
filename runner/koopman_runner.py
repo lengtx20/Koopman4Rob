@@ -19,7 +19,6 @@ from itertools import count
 from models.deep_koopman import Deep_Koopman
 from torch import optim
 from typing import Optional
-from configs.inter import Interactor
 from mcap_data_loader.utils.extra_itertools import first_recursive
 
 
@@ -66,7 +65,7 @@ class KoopmanRunner:
             from data.mcap_data_utils import create_dataloaders
 
             self._data_loaders = create_dataloaders(config)
-            interactor: Interactor = self.config.interactor
+            interactor = self.config.interactor
             interactor.add_config(self.config)
             interactor.add_first_batch(
                 first_recursive(
@@ -547,10 +546,6 @@ class KoopmanRunner:
             with open(model_dir / f"{self.mode}_metrics.json", "w") as f:
                 json.dump(metrics_dict, f, indent=4)
             print(f"[Test-{self.mode}] Results saved to {model_dir}")
-
-        # ----- visualization -----
-        if test_cfg.show_plot:
-            self.plot_trajectory()
 
     def infer(self):
         data_loader = self._data_loaders.get(self.mode, None)

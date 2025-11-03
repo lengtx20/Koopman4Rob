@@ -25,6 +25,7 @@ from config import Config
 from collections import defaultdict, ChainMap
 from data.mcap_data_utils import BatchProcessor, DictBatch
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
+from interactor import InteractorBasis
 from pathlib import Path
 from pprint import pprint
 from typing import Literal
@@ -93,7 +94,7 @@ class InteractorConfig(BaseModel):
     # """Whether to apply image transformations during inference."""
 
 
-class Interactor:
+class Interactor(InteractorBasis):
     def __init__(self, config: InteractorConfig):
         self.config = config
 

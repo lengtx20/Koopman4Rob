@@ -10,6 +10,7 @@ from typing import List, Optional, Literal, Any, Set, Dict, Union, Tuple, Callab
 from functools import cache
 from pathlib import Path
 from mcap_data_loader.utils.basic import NonIteratorIterable
+from interactor import InteractorBasis
 
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
@@ -291,7 +292,9 @@ class ModelConfig(BaseModel):
 class Config(CommonConfig):
     """Main configuration"""
 
-    model_config = MODEL_CONFIG
+    model_config = ConfigDict(
+        validate_assignment=True, extra="forbid", arbitrary_types_allowed=True
+    )
 
     datasets: List[NonIteratorIterable] = Field(min_length=1)
     """Configuration for the dataset."""
@@ -305,5 +308,5 @@ class Config(CommonConfig):
     """Configuration for testing."""
     infer: InferConfig = InferConfig()
     """Configuration for inference."""
-    interactor: Any
+    interactor: InteractorBasis
     """Configuration for the interactor."""
