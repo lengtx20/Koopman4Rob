@@ -7,6 +7,7 @@ import torch.nn as nn
 import inspect
 import json
 from class_resolver.contrib.torch import activation_resolver
+from typing import Dict
 
 
 class Encoder(nn.Module):
@@ -214,9 +215,10 @@ class Deep_Koopman(nn.Module):
         return (self.A @ z.T + self.B @ u.T).T
 
     def forward(
-        self, x: torch.Tensor, u: torch.Tensor, get_action: bool = False
+        self, batch: Dict[str, torch.Tensor], get_action: bool = False
     ) -> torch.Tensor:
         """Predict next state: x -> z -> z_next -> x_next"""
+        x, u = batch["cur_state"], batch["cur_action"]
         z = self.encode(x)
         z_next = self.linear_dynamics(z, u)
         return self.decode(z_next, get_action)

@@ -57,3 +57,10 @@ python3 main_blip2.py +mode=test +checkpoint_path=14/best
 ```
 其中`checkpoint_path`指定要加载的模型检查点路径，相对于`logs/checkpoints`目录。
 请注意修改配置文件中的数据集配置以加载测试数据集。
+
+
+## 推理
+
+```bash
+python3 main_blip2.py +mode=infer +checkpoint_path=14/best
+```

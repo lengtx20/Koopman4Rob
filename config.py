@@ -6,30 +6,34 @@ from pydantic import (
     ConfigDict,
     Field,
 )
-from typing import List, Optional, Literal, Any, Set, Dict, Union, Tuple
+from typing import List, Optional, Literal, Any, Set, Dict, Union, Tuple, Callable
 from functools import cache
 from pathlib import Path
 from mcap_data_loader.utils.basic import NonIteratorIterable
 
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
+StackType = Dict[str, List[str]]
+MODEL_CONFIG = ConfigDict(validate_assignment=True, extra="forbid")
 
 
 class DataLoaderConfig(BaseModel):
     """Configuration for data loader."""
 
-    states: List[str] = Field(min_length=1)
-    """List of state keys."""
-    actions: List[str] = Field(min_length=1)
-    """List of action keys."""
+    stack: StackType = {}
+    """Stack the dict values of a list of keys into a single value with the given key."""
     weights: List[str] = []
     """List of weight keys for each episode."""
     batch_size: PositiveInt = 1
     """Batch size for data loading."""
+    drop_last: bool = False
+    """Whether to drop the last incomplete batch."""
     num_workers: int = 0
     """Number of workers for data loading. 0 means single-threaded."""
     pair_gap: NonNegativeInt = 0
     """Gap between paired samples in epairwise."""
+    dict_tuple_depth: NonNegativeInt = 1
+    """Depth of converting the tuple data info a flattened dict."""
     prefetch_factor: NonNegativeInt = 0
     """Number of samples to prefetch per worker."""
     prefetch_snapshot_frequency: NonNegativeInt = 1
@@ -63,6 +67,8 @@ class CommonConfig(BaseModel):
     """Device to load tensors onto. If empty, will use "cuda" if available else "cpu"."""
     dtype: str = "float32"
     """Data type for tensors. E.g., 'float32', 'float16'."""
+    loss_fn: Callable[[Any, Any], Any]
+    """Loss function to use."""
     tb_log_dir: Path = Path("tensorboard")
     ewc_model: Optional[Path] = None
     ewc_lambda: float = 100.0
@@ -81,27 +87,23 @@ class CommonConfig(BaseModel):
 
 
 class TestConfig(BaseModel):
-    """Configuration for testing.
-    Args:
-        save_results: bool, whether to save the test results.
-        show_plot: bool, whether to show plots of the results.
-        rollout_steps: PositiveInt, number of steps for rollout prediction (>=1).
-    """
+    """Configuration for testing."""
 
     save_results: bool = True
+    """Whether to save the test results."""
     show_plot: bool = False
+    """Whether to show plots of the results."""
     rollout_steps: PositiveInt = 1
+    """Number of steps for rollout prediction (>=1)."""
 
 
 class KeyConditionConfig(BaseModel):
-    """Configuration for specifying stopping criteria based on keys.
-    Args:
-        necessary: Set[str], set of keys that are necessary conditions for stopping.
-        sufficient: Set[str], set of keys that are sufficient conditions for stopping.
-    """
+    """Configuration for specifying stopping criteria based on keys."""
 
     necessary: Set[str] = set()
+    """Set of keys that are necessary conditions for stopping."""
     sufficient: Set[str] = set()
+    """Set of keys that are sufficient conditions for stopping."""
 
     @property
     def keys(self) -> Set[str]:
@@ -109,31 +111,21 @@ class KeyConditionConfig(BaseModel):
 
 
 class IntermittentConfig(BaseModel):
-    """Configuration for interval-based operations.
-    Args:
-        unit (IterUnit): Unit of the interval.
-        interval (PositiveInt): Interval in the specified unit.
-        maximum (NonNegativeInt): Maximum number of times to perform the operation. If set to 0 (default), there is no limit.
-    """
+    """Configuration for interval-based operations."""
 
     unit: IterUnit = "minute"
+    """Unit of the interval."""
     interval: PositiveInt = 1
+    """Interval in the specified unit."""
     maximum: NonNegativeInt = 0
+    """Maximum number of times to perform the operation. If set to 0, there is no limit."""
 
 
 class SnapshotConfig(IntermittentConfig):
-    """Configuration for snapshot saving.
-
-    This class defines the configuration for saving snapshots during training.
-    Args:
-        keys (Set[str]): Set of metric keys to include in the snapshot.
-        unit (IterUnit): Unit of the interval for saving snapshots.
-        interval (PositiveInt): Interval for saving snapshots in the specified unit.
-        maximum (NonNegativeInt): Maximum number of snapshots to keep. If set to 0
-            (default), all snapshots are kept.
-    """
+    """Configuration for snapshot taking."""
 
     keys: Set[str] = set()
+    """Set of metric keys to include in the snapshot."""
 
 
 class TrainIterationConfig(BaseModel):
@@ -144,7 +136,7 @@ class TrainIterationConfig(BaseModel):
     Training will stop when any of the sufficient conditions are met or all necessary conditions are satisfied.
     """
 
-    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+    model_config = MODEL_CONFIG
 
     patience: NonNegativeInt = 0
     """Number of consecutive epochs with no improvement in the train or val loss before early stopping is triggered.
@@ -231,7 +223,7 @@ class SaveModelConfig(BaseModel):
 class TrainConfig(BaseModel):
     """Configuration for training."""
 
-    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+    model_config = MODEL_CONFIG
 
     task_id: PositiveInt = 1
     """Identifier for the training task."""
@@ -243,8 +235,6 @@ class TrainConfig(BaseModel):
     """Threshold value for EWC regularization."""
     ewc_regularization: bool = False
     """Whether to apply EWC regularization during training."""
-    loss_fn: Any = "MSELoss"
-    """Loss function to use during training."""
     iteration: TrainIterationConfig = Field(default_factory=TrainIterationConfig)
     """Configuration for training iteration."""
     snapshot: List[SnapshotConfig] = []
@@ -258,42 +248,29 @@ class TrainConfig(BaseModel):
     """
 
 
+class PropagationWithControlConfig(BaseModel):
+    """Configuration for model inference in kinds of propagation with control."""
+
+
 class InferConfig(BaseModel):
     """Configuration for inference."""
 
-    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+    model_config = MODEL_CONFIG
 
-    # TODO: use deriving structure for config
-    extra_models: Dict[str, Dict] = {}
-    """paths to extra models, e.g. vision backbones, for inference"""
-    obs_from_dataset: bool = False
-    """Whether to use observations from the dataset during inference."""
-    action_from_dataset: bool = False
-    """Whether to use actions from the dataset during inference."""
-    open_loop_predict: bool = False
-    """Whether to perform open-loop prediction during inference."""
-    send_action: bool = True
-    """Whether to send action commands during inference."""
     max_rollouts: NonNegativeInt = 0
     """Maximum number of rollouts to perform during inference."""
     max_steps: NonNegativeInt = 0
     """Maximum number of steps to perform during inference."""
     frequency: int = 0
     """The frequency (in steps) to send action commands.
-    0 means wait for input after every step. Negative means no limit.
+    0 means wait for any input after every step. Negative means no limit.
     """
-    show_image: bool = False
-    """Whether to display images during inference."""
-    image_transform: bool = False
-    """Whether to apply image transformations during inference."""
-    feature_from_dataset: bool = True
-    """Whether to use features from the dataset during inference."""
 
 
 class ModelConfig(BaseModel):
     """Configuration for the model."""
 
-    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+    model_config = MODEL_CONFIG
 
     state_dim: NonNegativeInt = 0
     """Dimension of the system state. If 0, will be inferred from data."""
@@ -314,7 +291,7 @@ class ModelConfig(BaseModel):
 class Config(CommonConfig):
     """Main configuration"""
 
-    model_config = ConfigDict(validate_assignment=True, extra="forbid")
+    model_config = MODEL_CONFIG
 
     datasets: List[NonIteratorIterable] = Field(min_length=1)
     """Configuration for the dataset."""
@@ -326,23 +303,7 @@ class Config(CommonConfig):
     """Configuration for training."""
     test: TestConfig = TestConfig()
     """Configuration for testing."""
-    infer: InferConfig = InferConfig(
-        extra_models={
-            "blip2-itm-vit-g": {
-                "path": Path("pretrained_models/blip2-itm-vit-g"),
-                "prompt": "The end effector of the robotic arm tries to get close to the QR code attached to the cabinet.",
-            }
-        },
-        frequency=0,
-        show_image=False,
-        # test for one step prediction of the dataset
-        # obs_from_dataset=True,
-        # action_from_dataset=False,
-        # feature_from_dataset=False,
-        # test for realtime continuous infering
-        obs_from_dataset=False,
-        feature_from_dataset=False,
-        action_from_dataset=False,
-        open_loop_predict=True,
-    )
+    infer: InferConfig = InferConfig()
     """Configuration for inference."""
+    interactor: Any
+    """Configuration for the interactor."""

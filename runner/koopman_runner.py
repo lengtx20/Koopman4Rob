@@ -2,14 +2,12 @@
 
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 import datetime
 import json
 import time
 import statistics
 import shutil
 from tqdm import tqdm
-from utils.utils import smooth_curve
 from utils.iter_manager import IterationManager
 from utils.fifo_save import FIFOSave
 from torch.utils.tensorboard import SummaryWriter
@@ -20,6 +18,8 @@ from collections import defaultdict, Counter
 from itertools import count
 from models.deep_koopman import Deep_Koopman
 from torch import optim
+from typing import Optional
+from configs.inter import Interactor
 
 
 class KoopmanDataset(Dataset):
@@ -44,10 +44,8 @@ class KoopmanRunner:
         )
         self.device = torch.device(config.device)
         # ===== init model and alg ===== #
-        loss_fn = config.train.loss_fn
-        if isinstance(loss_fn, str):
-            loss_fn = getattr(torch.nn, loss_fn)()
-        self.loss_fn = loss_fn
+
+        self.loss_fn = config.loss_fn
         self.mode = config.mode
         self.ewc_model = config.ewc_model
         self.train_data = train_data
@@ -66,17 +64,17 @@ class KoopmanRunner:
 
         # dataset
         if config.datasets:
-            from data.mcap_data_utils import create_train_val_dataloader
+            from data.mcap_data_utils import create_dataloaders
 
-            self.train_loader, self.val_loader = create_train_val_dataloader(config)
+            self._data_loaders = create_dataloaders(config)
         elif config.mode != "infer":
-            self.train_loader = DataLoader(
+            train_loader = DataLoader(
                 KoopmanDataset(train_data),
                 batch_size=batch_size,
                 shuffle=(True and config.mode == "train"),
                 num_workers=num_workers,
             )
-            self.val_loader = (
+            val_loader = (
                 DataLoader(
                     KoopmanDataset(val_data),
                     batch_size=batch_size,
@@ -86,6 +84,7 @@ class KoopmanRunner:
                 if val_data is not None
                 else None
             )
+            self._data_loaders = {"train": train_loader, "val": val_loader}
 
         def create_model():
             return Deep_Koopman(
@@ -107,10 +106,12 @@ class KoopmanRunner:
                 model = create_model()
                 model.load(model_dir=model_dir)
         model.to_device(self.device)
+        if self.mode == "train":
+            self.optimizer = optim.Adam(model.parameters(), lr=1e-4)
+        else:
+            model.eval()
         # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
         # TODO: configure this, ref. DP project
-        optimizer = optim.Adam(model.parameters(), lr=1e-4)
-        self.optimizer = optimizer
         self.model = model
         self.state_dim = config.model.state_dim
         self.action_dim = config.model.action_dim
@@ -298,6 +299,66 @@ class KoopmanRunner:
         else:
             print("[Warning] No valid Fisher info for encoder.layers.6.bias")
 
+    def iter_loader(self, stage: str, manager: Optional[IterationManager] = None):
+        start_time_ = time.monotonic()
+        sample_num = 0
+        total_loss = 0
+        loader = self._data_loaders[stage]
+        if not loader:
+            return None
+
+        if stage == "train":
+            self.model.train()
+        else:
+            self.model.eval()
+            no_grad = torch.no_grad()
+            no_grad.__enter__()
+        for batch in loader:
+            if stage == "train":
+                self.optimizer.zero_grad()
+
+            pred: torch.Tensor = self.model(batch)
+            loss: torch.Tensor = self.loss_fn(pred, batch)
+
+            if stage == "train":
+                if (
+                    self.config.train.ewc_regularization
+                    and self.ewc_model is not None
+                    and self.ewc_model.fisher is not None
+                ):
+                    loss += self.ewc_lambda * self.ewc_model.penalty(self.model)
+                loss.backward()
+
+            batch_size = batch["batch_size"]
+            total_loss += loss.item() * batch_size
+            sample_num += batch_size
+
+            if stage == "train":
+                self.optimizer.step()
+                if manager.update_train_iter(batch_size):
+                    break
+        avg_loss = total_loss / sample_num
+        if stage == "train":
+            if not manager.reasons:
+                manager.update_train_epoch(avg_loss)
+        else:
+            if stage == "val":
+                manager.update_val_epoch(avg_loss, time.monotonic() - start_time_)
+            no_grad.__exit__(None, None, None)
+        if stage != "infer":
+            ckpt_dir = self.config.checkpoint_path
+            save_model = ckpt_dir is not None
+            if save_model and manager.is_loss_improved(stage):
+                # print(f"[INFO] {stage} loss improved to {avg_loss:.5f}")
+                loss_key = f"{stage}_loss"
+                saved_fifo = self.improve_dict.get(loss_key, None)
+                if saved_fifo is not None:
+                    model_path = ckpt_dir / f"{loss_key}/{avg_loss:.5f}"
+                    saved_fifo.append(model_path)
+                    self.model.save(model_dir=model_path)
+                    print(f"[Runner] Model saved to {model_path}")
+        return avg_loss
+
     def train(self):
         """
         Called by 'train' mode.
@@ -308,9 +369,8 @@ class KoopmanRunner:
         best_val_loss = float("inf")
         train_cfg = config.train
         if train_cfg.threshold_mode is not None:
-            self.fisher_dict = None
             self.load_fisher(fisher_path=train_cfg.fisher_path)
-        improve_dict: dict[str, FIFOSave] = {
+        self.improve_dict: dict[str, FIFOSave] = {
             key: FIFOSave(max_count)
             for key, max_count in zip(
                 train_cfg.save_model.on_improve, train_cfg.save_model.maximum
@@ -321,84 +381,21 @@ class KoopmanRunner:
         self.tb_log_dir = self.tb_log_dir / f"{timestamp}"
         self.writer = SummaryWriter(log_dir=self.tb_log_dir)
         print(f"[INFO] TensorBoard logs will be saved to {self.tb_log_dir}")
-
         manager = IterationManager(config.train.iteration)
-
-        def iter_loader(stage: str):
-            start_time_ = time.monotonic()
-            sample_num = 0
-            total_loss = 0
-            loader = {"train": self.train_loader, "val": self.val_loader}[stage]
-            if loader is None:
-                return None
-            batch: torch.Tensor
-
-            if stage == "train":
-                self.model.train()
-            else:
-                self.model.eval()
-                no_grad = torch.no_grad()
-                no_grad.__enter__()
-            for batch in loader:
-                if stage == "train":
-                    self.optimizer.zero_grad()
-
-                batch = batch.to(self.device)
-                x_t = batch[:, : self.state_dim]
-                a_t = batch[:, self.state_dim : self.state_dim + self.action_dim]
-                x_t1 = batch[:, -self.state_dim :]
-
-                pred_x_t1 = self.model(x_t, a_t, False)
-                loss = self.loss_fn(pred_x_t1, x_t1)
-
-                if stage == "train":
-                    if (
-                        train_cfg.ewc_regularization
-                        and self.ewc_model is not None
-                        and self.ewc_model.fisher is not None
-                    ):
-                        loss += self.ewc_lambda * self.ewc_model.penalty(self.model)
-                    loss.backward()
-
-                total_loss += loss.item() * batch.size(0)
-                sample_num += batch.size(0)
-
-                if stage == "train":
-                    self.optimizer.step()
-                    if manager.update_train_iter(batch.size(0)):
-                        break
-            avg_loss = total_loss / sample_num
-            if stage == "train":
-                if not manager.reasons:
-                    manager.update_train_epoch(avg_loss)
-            else:
-                manager.update_val_epoch(avg_loss, time.monotonic() - start_time_)
-                no_grad.__exit__(None, None, None)
-            if save_model and manager.is_loss_improved(stage):
-                # print(f"[INFO] {stage} loss improved to {avg_loss:.5f}")
-                loss_key = f"{stage}_loss"
-                saved_fifo = improve_dict.get(loss_key, None)
-                if saved_fifo is not None:
-                    model_path = ckpt_dir / f"{loss_key}/{avg_loss:.5f}"
-                    saved_fifo.append(model_path)
-                    self.model.save(model_dir=model_path)
-                    print(f"[Runner] Model saved to {model_path}")
-            return avg_loss
-
         epoch_bar = tqdm(
             range(config.train.iteration.max_epoch), desc="[Training]", position=0
         )
         start_time = time.monotonic()
         start_timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         snapshots = defaultdict(list)
-        manager.start()
         snap_count = Counter()
         print(f"[Runner] Training started: {start_time}...")
+        manager.start()
         try:
             for epoch_i, epoch in enumerate(epoch_bar):
-                train_loss = iter_loader("train")
+                train_loss = self.iter_loader("train", manager)
                 train_reasons = manager.reasons
-                val_loss = iter_loader("val")
+                val_loss = self.iter_loader("val", manager)
                 val_reasons = manager.reasons
                 if val_reasons != train_reasons:
                     print(f"validation also: {train_reasons=}, {val_reasons=}")
@@ -491,7 +488,7 @@ class KoopmanRunner:
             last_model_path.mkdir(parents=True, exist_ok=True)
             self.model.save(model_dir=last_model_path)
             print(f"[Runner] Last model saved to {last_model_path}")
-            fifo_saver = improve_dict.get("val_loss", None)
+            fifo_saver = self.improve_dict.get("val_loss", None)
             if fifo_saver is not None:
                 shutil.copytree(fifo_saver.last_item, ckpt_dir / "best")
                 print(f"[Runner] Best model copied to {ckpt_dir / 'best'}")
@@ -517,269 +514,51 @@ class KoopmanRunner:
         else:
             print("[INFO] No EWC model attached or invalid.")
 
-    def test(self, dataset="train"):
+    def test(self):
         """Test model on given dataset (train/val)."""
         # ----- load model -----
         config = self.config
+        test_cfg = config.test
         model_dir = config.checkpoint_path
-        test_config = config.test
-        rollout_steps = test_config.rollout_steps
-        self.model.eval()
 
-        # ----- select dataset -----
-        if dataset == "train":
-            loader = self.train_loader
-        elif dataset == "val":
-            loader = self.val_loader
-        else:
-            raise ValueError("dataset must be 'train' or 'val'")
-
-        traj = []
-        total_loss, total_mae = 0, 0
-        n_samples = 0
-        total_array_sum = torch.zeros(self.state_dim, device=self.device)
-        array_max = torch.zeros(self.state_dim, device=self.device)
-        array_min = torch.zeros(self.state_dim, device=self.device) + 1e4
-        with torch.no_grad():
-            start_time = time.monotonic()
-            for index, batch in enumerate(loader):
-                batch = batch.to(self.device)
-                x_t = batch[:, : self.state_dim]
-                action_end = self.state_dim + self.action_dim
-                a_t = batch[:, self.state_dim : action_end]
-                x_t1 = batch[:, action_end:]
-
-                # ----- 单步 or 多步预测 -----
-                if rollout_steps == 1:
-                    pred_x_t1 = self.model(x_t, a_t, False)
-                else:
-                    # rollout N 步，输入是当前 state，动作来自数据
-                    pred_x_t1 = []
-                    cur_x = x_t
-                    for step in range(rollout_steps):
-                        cur_a = batch[
-                            :, self.state_dim : self.state_dim + self.action_dim
-                        ]
-                        cur_x = self.model(cur_x, cur_a, False)
-                        pred_x_t1.append(cur_x)
-                    pred_x_t1 = pred_x_t1[-1]  # 取最后一步预测
-
-                # ----- loss & metrics -----
-                actual_bs = batch.size(0)
-                loss = self.loss_fn(pred_x_t1, x_t1)
-                total_loss += loss.item() * actual_bs
-                n_samples += actual_bs
-                abs_error = torch.abs(pred_x_t1 - x_t1)
-                array_sum = abs_error.sum(dim=0)
-                array_max = torch.maximum(array_max, abs_error.max(dim=0).values)
-                array_min = torch.minimum(array_min, abs_error.min(dim=0).values)
-                total_array_sum += array_sum
-                total_mae += torch.mean(abs_error).item() * actual_bs
-
-                # ----- record the trajectory -----
-                # to cpu, do not waste gpu memory
-                traj.append(torch.cat([x_t, a_t, x_t1, pred_x_t1], dim=1).cpu().numpy())
-
+        start_time = time.monotonic()
+        # ----- computing loss -----
+        avg_loss = self.iter_loader("infer")
         # ----- summary -----
-        avg_mse = total_loss / n_samples
-        avg_rmse = np.sqrt(avg_mse)
-        avg_rmse_deg = avg_rmse / np.pi * 180
-        avg_array_mae = (total_array_sum / n_samples).cpu().numpy()
+        avg_rloss = np.sqrt(avg_loss)
+        avg_rloss_deg = avg_rloss / np.pi * 180
         metrics_dict = {
-            "avg_time_per_batch": (time.monotonic() - start_time) / (index + 1),
-            "avg_mse": avg_mse,
-            "avg_rmse": avg_rmse,
-            "avg_rmse_deg": avg_rmse_deg,
-            "avg_mae": total_mae / n_samples,
-            "avg_array_mae_rad": avg_array_mae.tolist(),
-            "avg_array_mae_deg": (avg_array_mae * 57.2958).tolist(),
-            "max_array_mae_deg": (array_max.cpu().numpy() * 57.2958).tolist(),
-            "min_array_mae_deg": (array_min.cpu().numpy() * 57.2958).tolist(),
+            "total_time": f"{(time.monotonic() - start_time):.2f} seconds",
+            "avg_loss": avg_loss,
+            "avg_rloss": avg_rloss,
+            "avg_rloss_deg": avg_rloss_deg,
         }
-        self.traj_np = np.concatenate(traj, axis=0)
-        print("[INFO] Trajectory shape:", self.traj_np.shape)
         pprint(metrics_dict)
 
         # ----- save the results -----
-        if test_config.save_results:
-            np.save(model_dir / f"{dataset}_traj.npy", self.traj_np)
-            with open(model_dir / f"{dataset}_metrics.json", "w") as f:
+        if test_cfg.save_results:
+            np.save(model_dir / f"{self.mode}_traj.npy", self.traj_np)
+            with open(model_dir / f"{self.mode}_metrics.json", "w") as f:
                 json.dump(metrics_dict, f, indent=4)
-            print(f"[Test-{dataset}] Results saved to {model_dir}")
+            print(f"[Test-{self.mode}] Results saved to {model_dir}")
 
         # ----- visualization -----
-        if test_config.show_plot:
+        if test_cfg.show_plot:
             self.plot_trajectory()
 
-    def plot_trajectory(self, use_smooth=True):
-        """
-        绘制每个状态变量随时间的轨迹（真实 vs 预测）。
-        x 轴为时间步，y 轴为状态值。
-        """
-        x_t = self.traj_np[:, : self.model.state_dim]  # True states
-        pred_x_t1 = self.traj_np[:, -self.model.state_dim :]  # Predicted states
-
-        print("[DEBUG] x_t shape:", x_t.shape)
-        print("[DEBUG] pred_x_t1 shape:", pred_x_t1.shape)
-        time_idx = np.arange(len(x_t))
-        num_dims = self.model.state_dim
-        ncols = min(2, num_dims)  # 每行最多 2 个
-        nrows = (num_dims + ncols - 1) // ncols
-
-        plt.figure(figsize=(6 * ncols, 3 * nrows))
-
-        for i in range(num_dims):
-            ax = plt.subplot(nrows, ncols, i + 1)
-
-            if use_smooth:
-                t_s, y_s = smooth_curve(time_idx, x_t[:, i])
-                t_p, y_p = smooth_curve(time_idx, pred_x_t1[:, i])
-            else:
-                t_s, y_s = time_idx, x_t[:, i]
-                t_p, y_p = time_idx, pred_x_t1[:, i]
-
-            ax.plot(t_s, y_s, label="True", color="blue")
-            ax.plot(t_p, y_p, label="Pred", color="orange")
-            ax.scatter(time_idx, x_t[:, i], color="blue", s=8, alpha=0.3)
-            ax.scatter(time_idx, pred_x_t1[:, i], color="orange", s=8, alpha=0.3)
-
-            ax.set_title(f"State[{i}] over Time")
-            ax.set_xlabel("Time step")
-            ax.set_ylabel(f"State {i}")
-            ax.legend()
-
-        plt.tight_layout()
-        plt.show()
-
     def infer(self):
-        from airbot_data_collection.common.systems.basis import SystemMode
-        from airbot_data_collection.common.environments.grouped import (
-            GroupedEnvironment,
-            GroupedEnvironmentConfig,
-            GroupsSendActionConfig,
-        )
-        from airbot_data_collection.common.systems.grouped import (
-            SystemSensorComponentGroupsConfig,
-            AutoControlConfig,
-        )
-        from airbot_data_collection.common.devices.cameras.v4l2 import (
-            V4L2Camera,
-            V4L2CameraConfig,
-        )
-
-        from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-        # from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
-
-        action_keys = self.config.robot_action_keys
-        data_dir = self.config.data_dir
-        use_dataset = data_dir is not None
-        from mcap_data_loader.utils.pytorch import torch_to_numpy_dtype_dict
-
-        if use_dataset:
-            from mcap_data_loader.datasets.mcap_dataset import (
-                McapFlatBuffersEpisodeDataset,
-                DataRearrangeConfig,
-                RearrangeType,
-                get_config_and_class_type,
-                to_episodic_sequence,
-                get_first_sample,
-            )
-            from mcap_data_loader.utils.av_coder import DecodeConfig
-
-            config_cls, dataset_cls = get_config_and_class_type(data_dir)
-
-            dataset = dataset_cls(
-                config_cls(
-                    data_root=data_dir,
-                    keys=self.config.image_keys + action_keys,
-                    strict=False,
-                    media_configs=[
-                        DecodeConfig(mismatch_tolerance=5, frame_format="rgb24")
-                    ],
-                    rearrange=DataRearrangeConfig(
-                        dataset=RearrangeType.SORT_STEM_DIGITAL
-                    )
-                    if dataset_cls is McapFlatBuffersEpisodeDataset
-                    else DataRearrangeConfig(),
-                )
-            )
-            dataset = to_episodic_sequence(dataset)
-            reset_action = get_first_sample(dataset)[action_keys[0]]["data"].tolist()
-            # McapFlatBuffersEpisodeDataset(
-
-            # )
-        else:
-            reset_action = []
-        env = GroupedEnvironment(
-            GroupedEnvironmentConfig(
-                components=SystemSensorComponentGroupsConfig(
-                    groups=["/"] * 2,
-                    names=["follow", "env_camera"],
-                    roles=["l", "o"],
-                    instances=[
-                        AIRBOTPlay(AIRBOTPlayConfig()),
-                        V4L2Camera(
-                            V4L2CameraConfig(camera_index="usb-0000:00:14.0-11")
-                        ),
-                    ],
-                ),
-                reset_action=GroupsSendActionConfig(
-                    groups=["/"] if reset_action else [],
-                    action_values=[reset_action],
-                    modes=[SystemMode.RESETTING],
-                ),
-                auto_control=AutoControlConfig(groups=[]),
-            )
-        )
-
-        # TODO: allow change the env reset action
-        if not env.configure():
-            raise RuntimeError("Failed to configure the grouped system.")
-
-        action = GroupsSendActionConfig(
-            groups=["/"],
-            action_values=[[]],
-            modes=[SystemMode.SAMPLING],
-        )
-        self.model.eval()
-        model_dtype = next(self.model.parameters()).dtype
-
-        print("[INFO] Model loaded for inference.")
-
-        from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
-
+        data_loader = self._data_loaders.get(self.mode, None)
+        use_data_loader = data_loader is not None
         infer_cfg = self.config.infer
-        blip2_cfg = infer_cfg.extra_models["blip2-itm-vit-g"]
-        prompt = blip2_cfg["prompt"]
-        if not prompt:
-            raise ValueError("BLIP2 prompt is empty.")
-        if not blip2_cfg["path"].exists():
-            raise FileNotFoundError(f"BLIP2 model not found at {blip2_cfg['path']}")
-        extractor = Blip2ImageFeatureExtractor(model_path=blip2_cfg["path"])
-        extractor.load_model()
+
+        interactor: Interactor = self.config.interactor
+        interactor.add_config(self.config)
+        interactor.add_first_batch(next(iter(data_loader[0])))
+
         freq = infer_cfg.frequency
         dt = 1 / freq if freq != 0 else 0
-        pred_x_t1 = torch.tensor(
-            reset_action, dtype=model_dtype, device=self.device
-        ).unsqueeze(0)
+        prediction = None
 
-        if infer_cfg.show_image:
-            import cv2
-            import einops
-
-        from torchvision.transforms import v2
-
-        transforms = [v2.ToImage()]
-        if infer_cfg.image_transform:
-            print("[INFO] Using image data augmentation transforms.")
-            transforms.extend(
-                [
-                    v2.ColorJitter(brightness=(0.5, 1.5), contrast=(0.5, 1.5)),
-                    v2.RandomAdjustSharpness(sharpness_factor=2, p=1),
-                ]
-            )
-        transforms.append(v2.ToDtype(extractor.dtype))
-        image_transform = v2.Compose(transforms)
         all_losses = []
         with torch.no_grad():
             try:
@@ -788,30 +567,8 @@ class KoopmanRunner:
                     max_rollouts = infer_cfg.max_rollouts
                     if max_rollouts > 0 and rollout > max_rollouts:
                         break
-                    if use_dataset:
-                        ep_ds = dataset[rollout]
-                        sample_iter = iter(ep_ds)
-                        print(f"[INFO] Dataset {ep_ds} loaded.")
-                        if infer_cfg.feature_from_dataset:
-                            from pathlib import Path
-                            from mcap_data_loader.datasets.mcap_dataset import (
-                                McapFlatBuffersSampleDataset,
-                                McapFlatBuffersSampleDatasetConfig,
-                            )
-
-                            path = (
-                                Path(f"{ep_ds.config.data_root.parent}_blip2_features")
-                                / ep_ds.config.data_root.name
-                            )
-                            print(f"[INFO] Preparing BLIP2 features at {path}...")
-                            blip_dataset = McapFlatBuffersSampleDataset(
-                                McapFlatBuffersSampleDatasetConfig(
-                                    data_root=path, keys=self.config.img_features_keys
-                                )
-                            )
-                            blip_dataset.load()
-                            blip_iter = iter(blip_dataset)
-                    env.reset()
+                    if use_data_loader:
+                        ep_iter = iter(data_loader[rollout])
                     if input(f"Press Enter to start {rollout=}...") == "q":
                         break
                     try:
@@ -819,91 +576,18 @@ class KoopmanRunner:
                             max_steps = infer_cfg.max_steps
                             if max_steps > 0 and step > max_steps:
                                 break
-                            if use_dataset and (
-                                infer_cfg.obs_from_dataset
-                                or infer_cfg.action_from_dataset
-                            ):
-                                ds_obs = next(sample_iter)
-                            if infer_cfg.obs_from_dataset:
-                                obs = ds_obs
-                            else:
-                                obs = env.output().observation
-                            cur_x_t_np = np.concatenate(
-                                [obs[key]["data"] for key in action_keys],
-                                dtype=torch_to_numpy_dtype_dict[model_dtype],
-                            )
-                            cur_x_t = (
-                                torch.from_numpy(cur_x_t_np)
-                                .to(device=self.device)
-                                .unsqueeze(0)
-                            )
-                            # print(f"{cur_x_t=}")
-                            # print(f"{pred_x_t1=}")
-                            if step == 0:
+                            batch_data = next(ep_iter) if use_data_loader else {}
+                            if step == 0 or not use_data_loader:
                                 loss = torch.tensor(0.0)
                             else:
-                                loss = torch.norm(cur_x_t - pred_x_t1) / np.pi * 180
-                            print(f"RMSE: {loss} deg")
+                                loss = self.loss_fn(prediction, batch_data)
+                            print(f"RMSE: {torch.sqrt(loss) * 180 / np.pi} deg")
                             losses.append(loss.item())
-                            if infer_cfg.open_loop_predict:
-                                x_t = pred_x_t1
-                            else:
-                                x_t = cur_x_t
-
-                            # print(obs.keys())
-                            # print("Processing features..")
-                            features = {}
-                            if infer_cfg.feature_from_dataset:
-                                blip2_obs = next(blip_iter)
-                                for key in self.config.img_features_keys:
-                                    features[key] = (
-                                        torch.from_numpy(blip2_obs[key]["data"])
-                                        .to(device=self.device, dtype=model_dtype)
-                                        .unsqueeze(0)
-                                    )
-                            else:
-                                for key in self.config.image_keys:
-                                    img = obs[key]["data"]
-                                    # raw_feature = extractor.process_image(img, prompt)[
-                                    #     "features_proj"
-                                    # ]
-                                    # img: torch.Tensor = image_transform(img)
-                                    features[key] = extractor.process_image(
-                                        img, prompt
-                                    )["features_proj"]
-                                    # print(
-                                    #     torch.norm(features[key] - raw_feature)
-                                    #     / torch.norm(raw_feature)
-                                    # )
-                                    if infer_cfg.show_image:
-                                        if isinstance(img, torch.Tensor):
-                                            np_img = einops.rearrange(
-                                                img.cpu()
-                                                .float()
-                                                .numpy()
-                                                .astype(np.uint8),
-                                                "c h w -> h w c",
-                                            )
-                                        else:
-                                            np_img = img
-                                        cv2.imshow(key, np_img[:, :, ::-1].copy())
-                            if infer_cfg.show_image:
-                                cv2.waitKey(1)
-                            # TODO: support multiple image features
-                            a_t = features[key]
-                            a_t = a_t.to(dtype=model_dtype)
                             # print("Predicting...")
-                            pred_x_t1 = self.model(x_t, a_t, False)
-                            if infer_cfg.action_from_dataset:
-                                # TODO: make sure using data from dataset
-                                action.action_values = [cur_x_t_np.tolist()]
-                            else:
-                                action.action_values = [
-                                    pred_x_t1.squeeze(0).cpu().numpy().tolist()
-                                ]
-                            if infer_cfg.send_action and not env.input(action):
-                                print("Failed to send action, resetting...")
-                                break
+                            prediction = self.model(
+                                interactor.get_model_input(prediction, batch_data)
+                            )
+                            interactor.update(prediction, batch_data)
                             if dt > 0:
                                 time.sleep(dt)
                             elif dt == 0:
@@ -920,8 +604,6 @@ class KoopmanRunner:
                             f"Rollout {rollout} loss mean: {mean_loss} std: {mean_std} deg"
                         )
                         all_losses.append(mean_loss)
-                    if infer_cfg.show_image:
-                        cv2.destroyAllWindows()
             except KeyboardInterrupt:
                 print("Inference session ended by user.")
             except (StopIteration, IndexError):
@@ -932,7 +614,7 @@ class KoopmanRunner:
             print(
                 f"Overall inference mean loss: {overall_mean}, std: {overall_std} deg, over {len(all_losses)} rollouts."
             )
-        env.shutdown()
+        return interactor.shutdown()
 
     def run(self, stage: str):
         return getattr(self, stage)()
