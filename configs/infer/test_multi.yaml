@@ -1,0 +1,5 @@
+# @package _global_
+
+infer:
+  frequency: -1
+  # rollout_wait: null

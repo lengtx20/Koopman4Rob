@@ -103,7 +103,7 @@ class Interactor(InteractorBasis):
             config.dtype, config.device, torch_stack, "torch"
         )
         self._torch_dtype = self._torch_batcher.torch_dtype
-        self._device = self._torch_batcher.device
+        self._device = self._torch_batcher.torch_device
         image_keys = ["/env_camera/color/image_raw"]
         self.from_keys = (
             image_keys

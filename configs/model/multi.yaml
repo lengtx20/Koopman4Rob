@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+  - single@extra
+
+extra:
+  root: logs/checkpoints
+  arm_state: /follow/arm/joint_state/position
+  eef_state: /follow/eef/joint_state/position
+
+model:
+  _target_: models.multimodel.MultiModel
+  callables:
+    - ${extra.model}
+    - ${extra.model}
+  paths:
+    - ${extra.root}/0
+    - ${extra.root}/1
+
+data_loader:
+  stack:
+    cur_state:
+      - 0.0${extra.arm_state}
+      - 0.0${extra.eef_state}
+    next_action:
+      - [["${extra.arm_state}", "${extra.eef_state}"], [1.0, 1.5]]
+    complex:
+      - [0.0key1, 0.0key2]
+      - [0.1key1, 0.1key2]
+      - [1.0key1, 1.0key2]
+      - [1.5key1, 1.5key2]

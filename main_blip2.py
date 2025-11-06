@@ -1,4 +1,4 @@
-"""Train data from resnet with Vision dataset using Deep Koopman model"""
+"""Training, validating, testing and inferring the model all in one"""
 
 from runner.koopman_runner import KoopmanRunner
 from config import Config
@@ -6,27 +6,16 @@ from config import Config
 
 def run(config: Config):
     runner = KoopmanRunner(config, None, None)
-
-    # ===== start main function ===== #
-    model_dir = config.checkpoint_path
     mode = config.mode
+    model_dir = config.checkpoint_path
     print(f"[INFO] Mode: {mode}. Model dir: {model_dir}")
     if mode == "train":
         # automatically change model dir if exists
         if model_dir.exists():
-            idx = 0
-            while True:
-                if model_dir.stem.isdigit():
-                    stem = str(int(model_dir.stem) + idx)
-                else:
-                    stem = f"{model_dir.stem}{idx}"
-                new_dir = model_dir.parent / f"{stem}{model_dir.suffix}"
-                if not new_dir.exists():
-                    model_dir = new_dir
-                    print(f"[INFO] Model dir exists. Change to {model_dir}")
-                    break
-                idx += 1
-        model_dir.mkdir(parents=True, exist_ok=True)
+            ids = [int(p.stem) for p in model_dir.parent.iterdir() if p.stem.isdigit()]
+            next_id = max(ids) + 1 if ids else 0
+            model_dir = model_dir.parent / f"{next_id}{model_dir.suffix}"
+        model_dir.mkdir(parents=True)
         config.checkpoint_path = model_dir
     runner.run(mode)
 

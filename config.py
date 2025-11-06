@@ -21,12 +21,14 @@ from typing import (
 from functools import cache
 from pathlib import Path
 from mcap_data_loader.utils.basic import NonIteratorIterable
+from mcap_data_loader.pipelines import HorizonConfig, DictTupleConfig
 from interactor import InteractorBasis
 from basis import ModelLike
 
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
-StackType = Dict[str, List[str]]
+NormStackValue = List[List[str]]
+StackType = Dict[str, Union[NormStackValue, List[str], Tuple[List[str], List[float]]]]
 MODEL_CONFIG = ConfigDict(validate_assignment=True, extra="forbid")
 
 
@@ -43,10 +45,10 @@ class DataLoaderConfig(BaseModel):
     """Whether to drop the last incomplete batch."""
     num_workers: int = 0
     """Number of workers for data loading. 0 means single-threaded."""
-    pair_gap: NonNegativeInt = 0
-    """Gap between paired samples in epairwise."""
-    dict_tuple_depth: NonNegativeInt = 1
-    """Depth of converting the tuple data info a flattened dict."""
+    horizon: HorizonConfig = HorizonConfig()
+    """Configuration for horizon processing."""
+    dict_tuple: DictTupleConfig = DictTupleConfig()
+    """Configuration for dict tuple processing."""
     prefetch_factor: NonNegativeInt = 0
     """Number of samples to prefetch per worker."""
     prefetch_snapshot_frequency: NonNegativeInt = 1
@@ -298,3 +300,7 @@ class Config(CommonConfig):
     """Configuration for inference."""
     interactor: InteractorBasis
     """Configuration for the interactor."""
+    extra: Dict[str, Any] = {}
+    """Extra configuration parameters. It is useful 
+    to store intermediate parameters in this field in the
+    hydra config file to avoid extra forbid error."""

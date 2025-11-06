@@ -1,20 +1,25 @@
+defaults:
+  - model: single
+  - infer: test
+
 datasets:
   _target_: configs.data.get_datasets
   data_name: reach3tags
 data_loader:
   _target_: configs.data.get_data_loader_config
   batch_size: 64
+  horizon:
+    past_num: 0
+    future_num: 1
+    fill_with_last: true
+    gap: 0
+  dict_tuple:
+    depth: 1
+    separator: "."
+    separate_key: false
+
 interactor:
   _target_: configs.inter.get_interactor
-model:
-  _target_: models.deep_koopman.DeepKoopman
-  config:
-    _target_: models.deep_koopman.DeepKoopmanConfig
-    hidden_sizes:
-      - 512
-      - 512
-      - 512
-    lifted_dim: 256
 train:
   iteration:
     max_train_time: 20 # minutes
@@ -28,6 +33,3 @@ train:
   train_val_split: [2, 1]
 loss_fn:
   _target_: configs.data.LossCalculator
-infer:
-  frequency: -1
-  # rollout_wait: null
