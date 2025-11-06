@@ -20,12 +20,9 @@ from typing import Tuple, List, Dict, Union, Literal
 from config import Config
 from pprint import pprint
 from collections import ChainMap
+from basis import DictBatch
 import torch
 import numpy as np
-
-
-ArrayType = Union[torch.Tensor, np.ndarray]
-DictBatch = ChainMap[str, Union[ArrayType, List[ArrayType], int]]
 
 
 class BatchProcessor:
@@ -126,16 +123,15 @@ def create_dataloader(
         }
 
     all_loaders = []
+    if config.mode == "infer":
+        print("Changing batch size to 1 for inference.")
+        dl_cfg.batch_size = 1
     for index, base_node in indexed_nodes.items():
         if dl_cfg.prefetch_factor > 0:
             node = nodes.Prefetcher(
                 base_node, dl_cfg.prefetch_factor, dl_cfg.prefetch_snapshot_frequency
             )
-        node = nodes.Batcher(
-            base_node,
-            dl_cfg.batch_size if config.mode != "infer" else 1,
-            dl_cfg.drop_last,
-        )
+        node = nodes.Batcher(base_node, dl_cfg.batch_size, dl_cfg.drop_last)
         node = nodes.ParallelMapper(node, batch_processor, dl_cfg.num_workers)
         if dl_cfg.pin_memory_device is not None:
             raise NotImplementedError(
@@ -170,7 +166,7 @@ def create_dataloaders(config: Config) -> Dict[str, nodes.Loader[DictBatch]]:
             splited_datasets["train"].append(train)
             splited_datasets["val"].append(val)
     else:
-        splited_datasets = {config.mode: config.datasets}
+        splited_datasets = {config.mode: list(config.datasets)}
     pprint(splited_datasets)
     print("checking the names and lengths are matching...")
     data_loaders = {}

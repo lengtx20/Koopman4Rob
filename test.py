@@ -1,29 +1,10 @@
-import timeit
-
-n = 100_000
-
-
-# 方法1：预分配 + 索引赋值
-def prealloc_index():
-    lst = [None] * n
-    for i in range(n):
-        lst[i] = i
-    return lst
+# Source - https://stackoverflow.com/questions/52076815/pytorch-use-device-inside-with-statement
+# Posted by Mahnerak
+# Retrieved 2025/11/5, License - CC-BY-SA 4.0
+import torch
 
 
-# 方法2：动态 append
-def dynamic_append():
-    lst = []
-    for i in range(n):
-        lst.append(i)
-    return lst
-
-
-n = 100_000
-
-time1 = timeit.timeit(prealloc_index, number=100)
-time2 = timeit.timeit(dynamic_append, number=100)
-
-print(f"Prealloc + index: {time1:.3f}s")
-print(f"Dynamic append:   {time2:.3f}s")
-print(f"Improvement:      {time2 / time1:.2f}x faster")
+with torch.device("cuda"):
+    mod = torch.nn.Linear(20, 30)
+    print(mod.weight.device)  # Output: cuda:0
+    print(mod(torch.randn(128, 20)).device)  # Output: cuda:0

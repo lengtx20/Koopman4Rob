@@ -7,11 +7,14 @@ data_loader:
 interactor:
   _target_: configs.inter.get_interactor
 model:
-  hidden_sizes:
-    - 512
-    - 512
-    - 512
-  lifted_dim: 256
+  _target_: models.deep_koopman.DeepKoopman
+  config:
+    _target_: models.deep_koopman.DeepKoopmanConfig
+    hidden_sizes:
+      - 512
+      - 512
+      - 512
+    lifted_dim: 256
 train:
   iteration:
     max_train_time: 20 # minutes

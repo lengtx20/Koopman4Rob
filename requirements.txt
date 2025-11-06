@@ -11,3 +11,4 @@ torchdata>=0.10.0
 transformers==4.57.0
 einops
 class-resolver
+accelerate

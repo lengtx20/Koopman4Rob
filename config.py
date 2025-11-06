@@ -6,11 +6,23 @@ from pydantic import (
     ConfigDict,
     Field,
 )
-from typing import List, Optional, Literal, Any, Set, Dict, Union, Tuple, Callable
+from typing import (
+    List,
+    Optional,
+    Literal,
+    Any,
+    Set,
+    Dict,
+    Union,
+    Tuple,
+    Callable,
+    Iterable,
+)
 from functools import cache
 from pathlib import Path
 from mcap_data_loader.utils.basic import NonIteratorIterable
 from interactor import InteractorBasis
+from basis import ModelLike
 
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
@@ -228,10 +240,6 @@ class TrainConfig(BaseModel):
 
     task_id: PositiveInt = 1
     """Identifier for the training task."""
-    fisher_path: Optional[Path] = None
-    """Path to save/load Fisher information matrix for EWC."""
-    threshold_mode: Optional[Literal["neural_ratio", "ewc_loss"]] = None
-    """Mode for EWC thresholding."""
     ewc_threshold: float = 1.0
     """Threshold value for EWC regularization."""
     ewc_regularization: bool = False
@@ -269,27 +277,6 @@ class InferConfig(BaseModel):
     rollout_wait: Any = "input"
 
 
-class ModelConfig(BaseModel):
-    """Configuration for the model."""
-
-    model_config = MODEL_CONFIG
-
-    state_dim: NonNegativeInt = 0
-    """Dimension of the system state. If 0, will be inferred from data."""
-    action_dim: NonNegativeInt = 0
-    """Dimension of the control input. If 0, will be inferred from data."""
-    hidden_sizes: List[PositiveInt]
-    """Sizes of hidden layers in the model."""
-    lifted_dim: PositiveInt
-    """Dimension of the lifted space."""
-    activation: str = "relu"
-    """Activation function to use in the model."""
-    include_iden_state: bool = True
-    """Whether to include identity state in the model."""
-    iden_decoder: bool = True
-    """Whether to use identity decoder in the model."""
-
-
 class Config(CommonConfig):
     """Main configuration"""
 
@@ -297,11 +284,11 @@ class Config(CommonConfig):
         validate_assignment=True, extra="forbid", arbitrary_types_allowed=True
     )
 
-    datasets: List[NonIteratorIterable] = Field(min_length=1)
+    datasets: Iterable[NonIteratorIterable] = Field(min_length=1)
     """Configuration for the dataset."""
     data_loader: DataLoaderConfig
     """Configuration for the data loader."""
-    model: ModelConfig
+    model: ModelLike
     """Configuration for the model."""
     train: TrainConfig = TrainConfig()
     """Configuration for training."""

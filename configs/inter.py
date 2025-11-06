@@ -116,8 +116,11 @@ class Interactor(InteractorBasis):
 
     def add_first_batch(self, batch: DictBatch):
         print(f"{list(batch.keys())=}")
-        if length := len(batch["cur_state"]) != 1:
-            raise ValueError(f"Interactor only supports batch size of 1. Got {length}.")
+        if self._shared_config.mode == "infer":
+            if (length := len(batch["cur_state"])) != 1:
+                raise ValueError(
+                    f"Interactor only supports batch size of 1. Got {length}."
+                )
         if batch:
             reset_action = batch["cur_state"][0].tolist()
         else:
@@ -150,15 +153,6 @@ class Interactor(InteractorBasis):
             action_values=[[]],
             modes=[SystemMode.SAMPLING],
         )
-        # get the state and action dims
-        state_dim = batch["cur_state"].shape[1]
-        action_dim = batch["cur_action"].shape[1]
-        print(f"[INFO] State dim: {state_dim}, Action dim: {action_dim}")
-        config = self._shared_config
-        if config.model.state_dim == 0:
-            config.model.state_dim = state_dim
-        if config.model.action_dim == 0:
-            config.model.action_dim = action_dim
 
     def _send_action(self, action: list):
         self._action.action_values[0] = action

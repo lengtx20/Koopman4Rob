@@ -25,3 +25,32 @@ def process_mse_losses(losses: list) -> dict:
             "std": statistics.stdev(value) if len(value) > 1 else 0.0,
         }
     return loss_stat
+
+
+def set_seed(seed):
+    import random
+    import numpy as np
+    import torch
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+
+def get_model_size(model, unit="MB"):
+    param_size = 0
+    for param in model.parameters():
+        param_size += param.nelement() * param.element_size()
+    buffer_size = 0
+    for buffer in model.buffers():
+        buffer_size += buffer.nelement() * buffer.element_size()
+
+    size_bytes = param_size + buffer_size
+    if unit == "KB":
+        return size_bytes / 1024
+    elif unit == "MB":
+        return size_bytes / (1024**2)
+    elif unit == "GB":
+        return size_bytes / (1024**3)
+    else:
+        return size_bytes

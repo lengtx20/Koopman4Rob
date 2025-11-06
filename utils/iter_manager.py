@@ -1,6 +1,6 @@
 from config import TrainIterationConfig
 from collections import Counter
-from typing import Set, Dict, Union, Tuple
+from typing import Set, Dict, Union, Tuple, Literal
 import time
 
 
@@ -110,7 +110,9 @@ class IterationManager:
         self._update_loss_flags("val", val_loss)
         return self._check_reasons()
 
-    def is_loss_improved(self, stage: str, ignore_first: bool = True) -> bool:
+    def is_loss_improved(
+        self, stage: Literal["train", "val"], ignore_first: bool = True
+    ) -> bool:
         if ignore_first and self._iter_counts["epoch"] == 1:
             return False
         return self._is_loss_improved.get(stage, False)

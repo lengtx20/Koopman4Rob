@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch.nn import MSELoss
-from models.deep_koopman import Deep_Koopman
+from models.deep_koopman import DeepKoopman
 from runner.koopman_runner import KoopmanRunner
 import os
 
@@ -52,7 +52,7 @@ def run(mode="test", data_dir=None, model_dir=None, fisher_path=None):
 
     # ===== init model and alg ===== #
     loss_fn = MSELoss()
-    model = Deep_Koopman(
+    model = DeepKoopman(
         state_dim=48,
         action_dim=6,
         hidden_sizes=[256] * 3,
