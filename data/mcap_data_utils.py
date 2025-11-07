@@ -6,6 +6,7 @@ from mcap_data_loader.datasets.mcap_dataset import (
     RearrangeType,
 )
 from mcap_data_loader.utils.extra_itertools import take_skip
+from mcap_data_loader.utils.basic import float_range
 from mcap_data_loader.pipelines import (
     NestedZip,
     NestedZipConfig,
@@ -85,6 +86,10 @@ class BatchProcessor:
         def process_value(config):
             if isinstance(config, tuple):
                 keys, prefixes = config
+                if len(prefixes) == 3 and isinstance(prefixes[2], int):
+                    # range style
+                    start, stop, step = prefixes
+                    prefixes = float_range(start, stop, step)
                 return [[f"{p}{k}" for k in keys] for p in prefixes]
             else:
                 first = config[0]

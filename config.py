@@ -28,7 +28,10 @@ from basis import ModelLike
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
 NormStackValue = List[List[str]]
-StackType = Dict[str, Union[NormStackValue, List[str], Tuple[List[str], List[float]]]]
+StackType = Dict[
+    str,
+    Union[NormStackValue, List[str], Tuple[List[str], List[Union[float, PositiveInt]]]],
+]
 MODEL_CONFIG = ConfigDict(validate_assignment=True, extra="forbid")
 
 

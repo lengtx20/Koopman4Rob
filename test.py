@@ -14,7 +14,9 @@ def make_sample(i):
         "0.0key1": {"data": np.ones(3) * (i + 0.0)},
         "0.0key2": {"data": np.ones(2) * (i + 0.1)},
         "1.0key1": {"data": np.ones(3) * (i + 1.0)},
+        "1.1key1": {"data": np.ones(3) * (i + 1.0)},
         "1.0key2": {"data": np.ones(2) * (i + 1.1)},
+        "1.1key2": {"data": np.ones(2) * (i + 1.1)},
         "1.2key1": {"data": np.ones(3) * (i + 1.2)},
         "1.2key2": {"data": np.ones(2) * (i + 1.3)},
         "0.1key1": {"data": np.ones(3) * (i + 0.1)},
@@ -33,7 +35,7 @@ batched_samples = [make_sample(i) for i in range(3)]
 # ===========================================================
 stack_config = {
     "cur_state": ["0.0key1", "0.0key2"],  # flat
-    "next_action": [["key1", "key2"], [1.0, 1.2]],  # range风格
+    "next_action": [["key1", "key2"], [1.0, 1.2, 1]],  # range风格
     "complex": [  # complex风格
         ["0.0key1", "0.0key2"],
         ["0.1key1", "0.1key2"],
@@ -45,7 +47,9 @@ stack_config = {
 # ===========================================================
 # 运行测试
 # ===========================================================
-processor = BatchProcessor(BatchStackerConfig(stack=stack_config))
+config = BatchStackerConfig(stack=stack_config, backend_out="numpy")
+print(config)
+processor = BatchProcessor(config)
 pprint(processor.stack)
 
 batched = processor(batched_samples)
@@ -62,3 +66,5 @@ for k, v in batched.items():
         print(f"{k:12s} -> shape {v.shape}")
     else:
         print(f"{k:12s} -> {v}")
+
+    # print(f"{k:12s} -> {v}")
