@@ -17,7 +17,7 @@ from mcap_data_loader.pipelines import (
 from typing import Tuple, List, Dict, Union, Literal
 from config import Config
 from pprint import pprint
-from collections import ChainMap, defaultdict
+from collections import ChainMap
 from basis import DictBatch
 from config import StackType, NormStackValue
 from pydantic import BaseModel
@@ -47,13 +47,11 @@ class BatchProcessor:
         if config.backend_in == "numpy":
             self.empty_func = lambda data: np.empty(data, dtype=self.np_dtype)
             self.concat_func = lambda arrays: np.concatenate(arrays, axis=-1)
-            self.stack_func = np.hstack
         else:
             self.empty_func = lambda data: torch.empty(
                 data, dtype=self.torch_dtype, device=self.torch_device
             )
             self.concat_func = lambda tensors: torch.cat(tensors, dim=-1)
-            self.stack_func = torch.hstack
         # determine conversion function
         if config.backend_in == config.backend_out:
             self.convert_func = lambda x: x
@@ -64,15 +62,23 @@ class BatchProcessor:
         else:
             self.convert_func = self._np_to_torch
         self.stack = self._normalize_stack_config(config.stack)
-        keys_to_stack = {}
-        v_keys = defaultdict(list)
+        keys_info = {}
+        self.keys_to_stack = set()
         for cat_key, list_keys in self.stack.items():
+            keys_info[cat_key] = {}
             col_num = len(list_keys[0])
+            cur_keys = []
             for c in range(col_num):
                 for r, keys in enumerate(list_keys):
-                    v_keys[cat_key].append(keys[c])
-                    keys_to_stack[keys[c]] = (cat_key, c, r)
-        self.keys_to_stack = keys_to_stack
+                    keys_info[cat_key][keys[c]] = [c, r]
+                    self.keys_to_stack.add(keys[c])
+                    cur_keys.append(keys[c])
+            if len(cur_keys) != len(keys_info[cat_key]):
+                raise ValueError(
+                    f"Duplicate keys found in stacking config for category '{cat_key}': {cur_keys}"
+                )
+
+        self.keys_info: Dict[str, dict] = keys_info
         self._first_call = True
 
     def _normalize_stack_config(self, stack: StackType) -> Dict[str, NormStackValue]:
@@ -99,48 +105,56 @@ class BatchProcessor:
         return data.tolist()
 
     def _reset_buffers(self):
-        for cat_key, c_shapes in self._batch_stack_shape.items():
-            for c, shape in enumerate(c_shapes):
-                self._batch_stack[cat_key][c] = self.empty_func(shape)
+        for cat_key, shape in self._batch_stack_shape.items():
+            self._batch_stack[cat_key] = self.empty_func(shape)
         for key in self._keys_no_stack:
             self._batch_list[key] = []
 
     def __call__(self, batched_samples: List[SampleStamped]) -> DictBatch:
         batch_size = len(batched_samples)
         if self._first_call:
-            batch_stack_shape: Dict[str, List[tuple]] = {}
-            batch_stack_empty: Dict[str, list] = {}
+            batch_stack_shape = {}
             first_sample = batched_samples[0]
             for cat_key, list_keys in self.stack.items():
                 first_row = list_keys[0]
                 row_num = len(list_keys)
-                batch_stack_shape[cat_key] = []
-                batch_stack_empty[cat_key] = []
-                for c, key in enumerate(first_row):
-                    batch_stack_shape[cat_key].append(
-                        (batch_size, row_num, *first_sample[key]["data"].shape)
-                    )
-                    batch_stack_empty[cat_key].append(None)
+                c2slice = []
+                bias = 0
+                for key in first_row:
+                    inc = first_sample[key]["data"].shape[-1]
+                    c2slice.append((bias, bias + inc))
+                    bias += inc
+                batch_stack_shape[cat_key] = (
+                    batch_size,
+                    row_num,
+                    *first_sample[key]["data"].shape[:-1],
+                    bias,
+                )
+                for key, config in self.keys_info[cat_key].items():
+                    config[0] = c2slice[config[0]]
             self._batch_stack_shape = batch_stack_shape
-            self._batch_stack = batch_stack_empty
-            self._keys_no_stack = first_sample.keys() - self.keys_to_stack.keys()
+            self._batch_stack = {}
+            self._keys_no_stack = first_sample.keys() - self.keys_to_stack
             self._batch_list: Dict[str, list] = {}
             self._first_call = False
         # allocate memory
         self._reset_buffers()
         # fill in data
         for i, sample in enumerate(batched_samples):
-            for key, config in self.keys_to_stack.items():
-                cat_key, c, r = config
-                self._batch_stack[cat_key][c][i, r] = sample[key]["data"]
+            for cat_key, keys_dict in self.keys_info.items():
+                for key, config in keys_dict.items():
+                    (start, stop), r = config
+                    self._batch_stack[cat_key][i, r, ..., start:stop] = sample[key][
+                        "data"
+                    ]
             for key in self._keys_no_stack:
                 self._batch_list[key].append(sample[key]["data"])
         # stack and move to device
         # TODO: use multi-treaded pin_memory and use a new cuda stream to copy asynchronously
         # TODO: test the performance vs tensor-dict
         final_batched = {}
-        for catkey, c_data in self._batch_stack.items():
-            final_batched[catkey] = self.convert_func(self.concat_func(c_data))
+        for catkey, data in self._batch_stack.items():
+            final_batched[catkey] = self.convert_func(data)
         # keep the remaining batched dict unstacked
         return ChainMap(final_batched, self._batch_list, {"batch_size": batch_size})
 

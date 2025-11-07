@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from data.mcap_data_utils import BatchProcessor, BatchStackerConfig
 from pprint import pprint
+import timeit
 
 
 # ===========================================================
@@ -44,10 +45,14 @@ stack_config = {
 # ===========================================================
 # 运行测试
 # ===========================================================
-processor = BatchProcessor(BatchStackerConfig(stack=stack_config, backend_out="list"))
+processor = BatchProcessor(BatchStackerConfig(stack=stack_config))
 pprint(processor.stack)
-batched = processor(batched_samples)
 
+batched = processor(batched_samples)
+# ===========================================================
+cost = timeit.timeit(lambda: processor(batched_samples), number=1000)
+print(f"Total time for 1000 runs: {cost:.6f} seconds")
+print(f"Average time per run: {cost:.6f} ms")
 # ===========================================================
 # 打印结果形状
 # ===========================================================
