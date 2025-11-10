@@ -39,8 +39,8 @@ def get_datasets(data_name: str):
         "strict": False,
         "rearrange": DataRearrangeConfig(dataset=RearrangeType.SORT_STEM_DIGITAL),
     }
-    other_keys = {base_root: image_keys}
-    # other_keys = {}
+    # other_keys = {base_root: image_keys}
+    other_keys = {}
     print(f"{base_root=}, {feature_root=}")
     datasets = []
     for key_dict in all_cat_keys.values():

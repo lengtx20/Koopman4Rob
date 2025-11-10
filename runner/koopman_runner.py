@@ -159,7 +159,7 @@ class KoopmanRunner:
                     saved_fifo.append(model_path)
                     self.model.save(model_path)
                     print(f"[Runner] Model saved to {model_path}")
-        print(f"Iteration {stage} took {time.monotonic() - start_time:.2f} seconds")
+        # print(f"Iteration {stage} took {time.monotonic() - start_time:.2f} seconds")
         return avg_loss
 
     def train(self):
@@ -239,6 +239,7 @@ class KoopmanRunner:
 
         total_time = (time.monotonic() - start_time) / 60.0  # in minutes
         total_time_per_epoch = total_time / (epoch_i + 1)
+        batch_size = config.data_loader.batch_size
         metrics = {
             "time_stamp": {
                 "start": start_timestamp,
@@ -247,8 +248,7 @@ class KoopmanRunner:
             "model_size_mb": get_model_size(self.model),
             "total_time_minutes": total_time,
             "total_time_minutes_per_epoch": total_time_per_epoch,
-            "total_time_minutes_per_epoch_no_batch": total_time_per_epoch
-            * config.data_loader.batch_size,
+            "total_time_minutes_per_epoch_no_batch": total_time_per_epoch * batch_size,
             "iteration": manager.records,
             "snapshots": {
                 "period": {
@@ -275,6 +275,10 @@ class KoopmanRunner:
             np.save(ckpt_dir / "vales.npy", np.array(self.vales))
             with open(ckpt_dir / "training_metrics.json", "w") as f:
                 json.dump(metrics, f, indent=4)
+            with open(ckpt_dir / "training_config.json", "w") as f:
+                json.dump(
+                    config.model_dump(mode="json", fallback=lambda x: None), f, indent=4
+                )
             print(f"[Runner] Losses, vales and metrics saved to {ckpt_dir}")
         else:
             print("[INFO] No Koopman model saved")
