@@ -1,11 +1,7 @@
-from typing import runtime_checkable, Union, List, Protocol, Optional, Any
+from typing import runtime_checkable, Protocol, Optional, Any
 from pathlib import Path
 from typing_extensions import Self
-from collections import ChainMap
-from airbot_data_collection.common.utils.array_like import Array
-
-
-DictBatch = ChainMap[str, Union[Array, List[Array], int]]
+from mcap_data_loader.callers.stack import DictBatch
 
 
 @runtime_checkable

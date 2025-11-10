@@ -1,174 +1,40 @@
 from torchdata import nodes
 from mcap_data_loader.datasets.mcap_dataset import (
     McapFlatBuffersSampleDataset,
-    SampleStamped,
     McapFlatBuffersEpisodeDataset,
     RearrangeType,
 )
 from mcap_data_loader.utils.extra_itertools import take_skip
-from mcap_data_loader.utils.basic import float_range
 from mcap_data_loader.pipelines import (
     NestedZip,
     NestedZipConfig,
     Merge,
     MergeConfig,
     Horizon,
-    DictTuple,
+    Map,
+    MapConfig,
+    PairWise,
 )
-from typing import Tuple, List, Dict, Union, Literal
+from mcap_data_loader.callers.stack import BatchStacker, BatchStackerConfig, DictBatch
+from mcap_data_loader.callers import DictTuple
+from typing import Tuple, List, Dict, Union
 from config import Config
 from pprint import pprint
-from collections import ChainMap
-from basis import DictBatch
-from config import StackType, NormStackValue
-from pydantic import BaseModel
-from airbot_data_collection.common.utils.array_like import get_tensor_device_auto
-import torch
-import numpy as np
-
-
-class BatchStackerConfig(BaseModel):
-    dtype: str = ""
-    """Data type for the stacked tensors/arrays."""
-    device: str = ""
-    """Device to move the stacked tensors to (only for torch backend)."""
-    stack: StackType
-    """Configuration for stacking keys."""
-    backend_in: Literal["torch", "numpy"] = "numpy"
-    """The input data backend."""
-    backend_out: Literal["torch", "numpy", "list"] = "numpy"
-    """The output data backend."""
-
-
-class BatchProcessor:
-    def __init__(self, config: BatchStackerConfig):
-        self.torch_dtype = getattr(torch, config.dtype or "float32")
-        self.np_dtype = getattr(np, config.dtype or "float32")
-        self.torch_device = get_tensor_device_auto(config.device)
-        if config.backend_in == "numpy":
-            self.empty_func = lambda data: np.empty(data, dtype=self.np_dtype)
-            self.concat_func = lambda arrays: np.concatenate(arrays, axis=-1)
-        else:
-            self.empty_func = lambda data: torch.empty(
-                data, dtype=self.torch_dtype, device=self.torch_device
-            )
-            self.concat_func = lambda tensors: torch.cat(tensors, dim=-1)
-        # determine conversion function
-        if config.backend_in == config.backend_out:
-            self.convert_func = lambda x: x
-        elif config.backend_out == "list":
-            self.convert_func = self._to_list
-        elif config.backend_out == "numpy":
-            self.convert_func = self._torch_to_np
-        else:
-            self.convert_func = self._np_to_torch
-        self.stack = self._normalize_stack_config(config.stack)
-        keys_info = {}
-        self.keys_to_stack = set()
-        for cat_key, list_keys in self.stack.items():
-            keys_info[cat_key] = {}
-            col_num = len(list_keys[0])
-            cur_keys = []
-            for c in range(col_num):
-                for r, keys in enumerate(list_keys):
-                    keys_info[cat_key][keys[c]] = [c, r]
-                    self.keys_to_stack.add(keys[c])
-                    cur_keys.append(keys[c])
-            if len(cur_keys) != len(keys_info[cat_key]):
-                raise ValueError(
-                    f"Duplicate keys found in stacking config for category '{cat_key}': {cur_keys}"
-                )
-
-        self.keys_info: Dict[str, dict] = keys_info
-        self._first_call = True
-
-    def _normalize_stack_config(self, stack: StackType) -> Dict[str, NormStackValue]:
-        def process_value(config):
-            if isinstance(config, tuple):
-                keys, prefixes = config
-                if len(prefixes) == 3 and isinstance(prefixes[2], int):
-                    # range style
-                    start, stop, step = prefixes
-                    prefixes = float_range(start, stop, step)
-                return [[f"{p}{k}" for k in keys] for p in prefixes]
-            else:
-                first = config[0]
-                if isinstance(first, str):
-                    return [config]
-                else:
-                    return config
-
-        return {k: process_value(v) for k, v in stack.items()}
-
-    def _np_to_torch(self, array: np.ndarray) -> torch.Tensor:
-        return torch.from_numpy(array).to(device=self.torch_device, non_blocking=True)
-
-    def _torch_to_np(self, tensor: torch.Tensor) -> np.ndarray:
-        return tensor.cpu().numpy()
-
-    def _to_list(self, data: Union[np.ndarray, torch.Tensor]) -> list:
-        return data.tolist()
-
-    def _reset_buffers(self):
-        for cat_key, shape in self._batch_stack_shape.items():
-            self._batch_stack[cat_key] = self.empty_func(shape)
-        for key in self._keys_no_stack:
-            self._batch_list[key] = []
-
-    def __call__(self, batched_samples: List[SampleStamped]) -> DictBatch:
-        batch_size = len(batched_samples)
-        if self._first_call:
-            batch_stack_shape = {}
-            first_sample = batched_samples[0]
-            for cat_key, list_keys in self.stack.items():
-                first_row = list_keys[0]
-                row_num = len(list_keys)
-                c2slice = []
-                bias = 0
-                for key in first_row:
-                    inc = first_sample[key]["data"].shape[-1]
-                    c2slice.append((bias, bias + inc))
-                    bias += inc
-                batch_stack_shape[cat_key] = (
-                    batch_size,
-                    row_num,
-                    *first_sample[key]["data"].shape[:-1],
-                    bias,
-                )
-                for key, config in self.keys_info[cat_key].items():
-                    config[0] = c2slice[config[0]]
-            self._batch_stack_shape = batch_stack_shape
-            self._batch_stack = {}
-            self._keys_no_stack = first_sample.keys() - self.keys_to_stack
-            self._batch_list: Dict[str, list] = {}
-            self._first_call = False
-        # allocate memory
-        self._reset_buffers()
-        # fill in data
-        for i, sample in enumerate(batched_samples):
-            for cat_key, keys_dict in self.keys_info.items():
-                for key, config in keys_dict.items():
-                    (start, stop), r = config
-                    self._batch_stack[cat_key][i, r, ..., start:stop] = sample[key][
-                        "data"
-                    ]
-            for key in self._keys_no_stack:
-                self._batch_list[key].append(sample[key]["data"])
-        # stack and move to device
-        # TODO: use multi-treaded pin_memory and use a new cuda stream to copy asynchronously
-        # TODO: test the performance vs tensor-dict
-        final_batched = {}
-        for catkey, data in self._batch_stack.items():
-            final_batched[catkey] = self.convert_func(data)
-        # keep the remaining batched dict unstacked
-        return ChainMap(final_batched, self._batch_list, {"batch_size": batch_size})
 
 
 def create_dataloader(
     config: Config, datasets: list
 ) -> Union[nodes.Loader, List[nodes.Loader]]:
     dl_cfg = config.data_loader
-    batch_processor = BatchProcessor(config.dtype, config.device, dl_cfg.stack)
+    batch_stacker = BatchStacker(
+        BatchStackerConfig(
+            dtype=config.dtype,
+            device=config.device,
+            stack=dl_cfg.stack,
+            backend_out="torch",
+        )
+    )
+    batch_stacker.configure()
     # zipping the internal episodes of the datasets
     nested = NestedZip[McapFlatBuffersEpisodeDataset](NestedZipConfig(depth=1))(
         datasets
@@ -178,9 +44,18 @@ def create_dataloader(
     for index, zipped_episodes in enumerate(nested):
         # merge the zipped episodes
         merged = Merge(MergeConfig(method="ChainMap"))(zipped_episodes)
-        # TODO: use a more common past_future wrapper?
-        paired = Horizon(dl_cfg.horizon)(merged)
-        dict_tupled = DictTuple(dl_cfg.dict_tuple)(paired)
+        if dl_cfg.horizon is not None:
+            tupled = Horizon(dl_cfg.horizon)(merged)
+            depth = 2
+        elif dl_cfg.pairwise is not None:
+            tupled = PairWise(dl_cfg.pairwise)(merged)
+            depth = 1
+        else:
+            raise ValueError(
+                "Either horizon or pairwise configuration must be provided."
+            )
+        dl_cfg.dict_tuple.depth = depth
+        dict_tupled = Map(MapConfig(callable=DictTuple(dl_cfg.dict_tuple)))(tupled)
         source_node = nodes.IterableWrapper(dict_tupled)
         source_nodes[index] = source_node
         weights[index] = dl_cfg.weights[index] if dl_cfg.weights else 1.0
@@ -189,7 +64,10 @@ def create_dataloader(
     else:
         indexed_nodes = {
             0: nodes.MultiNodeWeightedSampler(
-                source_nodes, weights, nodes.StopCriteria.ALL_DATASETS_EXHAUSTED
+                source_nodes,
+                weights,
+                nodes.StopCriteria.ALL_DATASETS_EXHAUSTED,
+                seed=config.seed,
             )
         }
 
@@ -198,12 +76,8 @@ def create_dataloader(
         print("Changing batch size to 1 for inference.")
         dl_cfg.batch_size = 1
     for index, base_node in indexed_nodes.items():
-        if dl_cfg.prefetch_factor > 0:
-            node = nodes.Prefetcher(
-                base_node, dl_cfg.prefetch_factor, dl_cfg.prefetch_snapshot_frequency
-            )
         node = nodes.Batcher(base_node, dl_cfg.batch_size, dl_cfg.drop_last)
-        node = nodes.ParallelMapper(node, batch_processor, dl_cfg.num_workers)
+        node = nodes.ParallelMapper(node, batch_stacker, **dl_cfg.parallel.model_dump())
         if dl_cfg.pin_memory_device is not None:
             raise NotImplementedError(
                 "Pin memory is not implemented in this MCAP data loader now."

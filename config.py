@@ -21,22 +21,46 @@ from typing import (
 from functools import cache
 from pathlib import Path
 from mcap_data_loader.utils.basic import NonIteratorIterable
-from mcap_data_loader.pipelines import HorizonConfig, DictTupleConfig
+from mcap_data_loader.pipelines import HorizonConfig, PairWiseConfig
 from interactor import InteractorBasis
 from basis import ModelLike
+from mcap_data_loader.callers.stack import StackType
+from mcap_data_loader.callers.dict_tuple import DictTupleConfig
 
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
-NormStackValue = List[List[str]]
-StackType = Dict[
-    str,
-    Union[NormStackValue, List[str], Tuple[List[str], List[Union[float, PositiveInt]]]],
-]
 MODEL_CONFIG = ConfigDict(validate_assignment=True, extra="forbid")
+
+
+class ParallelConfig(BaseModel):
+    """Configuration for parallel processing.
+    The data will be processed in parallel either in num_workers threads or
+    processes. At most one iter() is created from source, and at most one
+    thread will call next() on it at once.
+    """
+
+    model_config = MODEL_CONFIG
+
+    num_workers: NonNegativeInt = 0
+    """The number of workers to use for parallel processing. 0 means no parallelism."""
+    in_order: bool = True
+    """Whether to return items in the order from which they arrive from. If true, the iterator will return items in the order from which they arrive from source's iterator, potentially blocking even if other items are available."""
+    method: Literal["thread", "process"] = "thread"
+    """The method to use for parallel processing."""
+    multiprocessing_context: Optional[Literal["spawn", "forkserver", "fork"]] = None
+    """The multiprocessing context to use for parallel processing. 
+    If None, the OS default context will be used."""
+    max_concurrent: Optional[PositiveInt] = None
+    """At most number of items will be either processed or in the iterator's output queue, 
+    to limit CPU and Memory utilization. If None (default) the value will be 2 * num_workers."""
+    snapshot_frequency: NonNegativeInt = 1
+    """Frequency (in number of samples) to take snapshots of the parallel processing."""
 
 
 class DataLoaderConfig(BaseModel):
     """Configuration for data loader."""
+
+    model_config = MODEL_CONFIG
 
     stack: StackType = {}
     """Stack the dict values of a list of keys into a single value with the given key."""
@@ -48,14 +72,14 @@ class DataLoaderConfig(BaseModel):
     """Whether to drop the last incomplete batch."""
     num_workers: int = 0
     """Number of workers for data loading. 0 means single-threaded."""
-    horizon: HorizonConfig = HorizonConfig()
+    horizon: Optional[HorizonConfig] = None
     """Configuration for horizon processing."""
+    pairwise: Optional[PairWiseConfig] = None
+    """Configuration for pairwise processing."""
     dict_tuple: DictTupleConfig = DictTupleConfig()
     """Configuration for dict tuple processing."""
-    prefetch_factor: NonNegativeInt = 0
-    """Number of samples to prefetch per worker."""
-    prefetch_snapshot_frequency: NonNegativeInt = 1
-    """Frequency (in number of samples) to take snapshots of the data loader."""
+    parallel: ParallelConfig = ParallelConfig()
+    """Configuration for parallel processing."""
     pin_memory_device: Optional[str] = None
     """Device to pin memory to. If None, pin memory is not used. If set to "", defaults to "cuda" if available."""
     pin_memory_snapshot_frequency: NonNegativeInt = 1
@@ -262,10 +286,6 @@ class TrainConfig(BaseModel):
     """
 
 
-class PropagationWithControlConfig(BaseModel):
-    """Configuration for model inference in kinds of propagation with control."""
-
-
 class InferConfig(BaseModel):
     """Configuration for inference."""
 
@@ -301,7 +321,7 @@ class Config(CommonConfig):
     """Configuration for testing."""
     infer: InferConfig = InferConfig()
     """Configuration for inference."""
-    interactor: InteractorBasis
+    interactor: Optional[InteractorBasis] = None
     """Configuration for the interactor."""
     extra: Dict[str, Any] = {}
     """Extra configuration parameters. It is useful 

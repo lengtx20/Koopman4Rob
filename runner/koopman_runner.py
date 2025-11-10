@@ -19,7 +19,7 @@ from itertools import count
 from torch import optim
 from typing import Optional, Callable, Any
 from mcap_data_loader.utils.extra_itertools import first_recursive
-from airbot_data_collection.common.utils.array_like import get_tensor_device_auto
+from mcap_data_loader.utils.array_like import get_tensor_device_auto
 
 
 class KoopmanDataset(Dataset):
@@ -67,8 +67,9 @@ class KoopmanRunner:
                 self._data_loaders.values(), 3 if self.mode == "infer" else 2
             )
             interactor = self.config.interactor
-            interactor.add_config(self.config)
-            interactor.add_first_batch(first_batch)
+            if interactor is not None:
+                interactor.add_config(self.config)
+                interactor.add_first_batch(first_batch)
         elif config.mode != "infer":
             train_loader = DataLoader(
                 KoopmanDataset(train_data),
@@ -234,7 +235,6 @@ class KoopmanRunner:
                     break
         except KeyboardInterrupt:
             manager.reasons.add("KeyboardInterrupt")
-
         print(f"Stop reasons: {manager.reasons}")
 
         total_time = (time.monotonic() - start_time) / 60.0  # in minutes
@@ -268,7 +268,7 @@ class KoopmanRunner:
             self.model.save(path=last_model_path)
             print(f"[Runner] Last model saved to {last_model_path}")
             fifo_saver = self.improve_dict.get("val_loss", None)
-            if fifo_saver is not None:
+            if fifo_saver.last_item is not None:
                 shutil.copytree(fifo_saver.last_item, ckpt_dir / "best")
                 print(f"[Runner] Best model copied to {ckpt_dir / 'best'}")
             np.save(ckpt_dir / "losses.npy", np.array(self.losses))

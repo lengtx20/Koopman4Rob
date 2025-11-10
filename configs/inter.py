@@ -23,7 +23,7 @@ from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 from pydantic import BaseModel
 from config import Config
 from collections import ChainMap
-from data.mcap_data_utils import BatchProcessor, DictBatch
+from data.mcap_data_utils import BatchStacker, BatchStackerConfig, DictBatch
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
 from interactor import InteractorBasis
 from pathlib import Path
@@ -53,9 +53,9 @@ class InteractorConfig(BaseModel):
     """Configuration for the interactor between the model and the environment."""
 
     extractor: ExtractorConfig
+    """Configuration for the feature extractor."""
     open_loop_predict: bool = False
     """Whether to perform open-loop prediction during inference."""
-    """Configuration for the feature extractor."""
     action_from: Literal["model", "data_loader", "none"] = "model"
     """Whether to use actions from the data loader during inference.
     If False, actions will be taken from the model."""
@@ -67,8 +67,7 @@ class InteractorConfig(BaseModel):
 
 
 class Interactor(InteractorBasis):
-    def __init__(self, config: InteractorConfig):
-        self.config = config
+    config: InteractorConfig
 
     def add_config(self, config: Config):
         stack_dl = config.data_loader.stack
@@ -96,14 +95,23 @@ class Interactor(InteractorBasis):
             pprint(f"DataLoader stack:\n{stack_dl}")
             pprint(f"Interactor torch_stack:\n{torch_stack}")
         pprint(f"Interactor plain_stack:\n{stack_env}")
-        self._np_batcher = BatchProcessor(
-            config.dtype, config.device, stack_env, "numpy"
+        # np batcher for env data (numpy arrays)
+        self._np_batcher = BatchStacker(
+            BatchStackerConfig(
+                dtype=config.dtype,
+                device=config.device,
+                stack=stack_env,
+                backend_out="torch",
+            )
         )
-        self._torch_batcher = BatchProcessor(
-            config.dtype, config.device, torch_stack, "torch"
+        # torch batcher for extracted data (torch tensors)
+        self._torch_batcher = BatchStacker(
+            BatchStackerConfig(
+                dtype=config.dtype,
+                device=config.device,
+                stack=torch_stack,
+            )
         )
-        self._torch_dtype = self._torch_batcher.torch_dtype
-        self._device = self._torch_batcher.torch_device
         image_keys = ["/env_camera/color/image_raw"]
         self.from_keys = (
             image_keys
@@ -195,18 +203,3 @@ class Interactor(InteractorBasis):
 
     def shutdown(self):
         return self.env.shutdown()
-
-
-def get_interactor() -> Interactor:
-    interactor_cfg = InteractorConfig(
-        extractor=ExtractorConfig(
-            model_path=Path("pretrained_models/blip2-itm-vit-g"),
-            prompt="The end effector of the robotic arm tries to get close to the QR code attached to the cabinet.",
-            enable=True,
-        ),
-        open_loop_predict=False,
-        action_from="data_loader",
-        model_input_from="data_loader",
-    )
-    interactor = Interactor(interactor_cfg)
-    return interactor

@@ -1,7 +1,11 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from mcap_data_loader.basis.cfgable import ConfigurableBasis
 
 
-class InteractorBasis(ABC):
+class InteractorBasis(ConfigurableBasis):
+    def on_configure(self):
+        return True
+
     @abstractmethod
     def add_config(self, config):
         """Add the global shared configuration to the interactor."""

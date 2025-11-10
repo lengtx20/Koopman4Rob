@@ -19,11 +19,11 @@ def _concat_values(values):
     return result
 
 
-def get_datasets(data_name):
+def get_datasets(data_name: str):
     print(f"Loading datasets for {data_name}...")
     global all_cat_keys
 
-    base_root = Path(f"mcap_data/{data_name}")
+    base_root = Path("mcap_data") / data_name
     root_dir = base_root if base_root.is_dir() else base_root.parent
     feature_root_dir = Path(f"{root_dir}_blip2_features")
     feature_root = (
@@ -40,6 +40,7 @@ def get_datasets(data_name):
         "rearrange": DataRearrangeConfig(dataset=RearrangeType.SORT_STEM_DIGITAL),
     }
     other_keys = {base_root: image_keys}
+    # other_keys = {}
     print(f"{base_root=}, {feature_root=}")
     datasets = []
     for key_dict in all_cat_keys.values():
@@ -91,4 +92,4 @@ class LossCalculator:
         self._func = getattr(torch.nn, name)()
 
     def __call__(self, predictions: torch.Tensor, batch_data: dict) -> torch.Tensor:
-        return self._func(predictions, batch_data["next_state"])
+        return self._func(predictions, batch_data["next_state"].squeeze(1))

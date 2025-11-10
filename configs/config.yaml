@@ -1,25 +1,27 @@
 defaults:
+  - _self_
   - model: single
-  - infer: test
+  # - infer: test_single # use +infer=test_single in CLI
+
+extra:
+  arm_state: /follow/arm/joint_state/position
+  eef_state: /follow/eef/joint_state/position
+  env_color: /env_camera/color/image_raw
+  env_color_feat: ${extra.env_color}/features_proj
 
 datasets:
   _target_: configs.data.get_datasets
   data_name: reach3tags
 data_loader:
-  _target_: configs.data.get_data_loader_config
+  # _target_: configs.data.get_data_loader_config
   batch_size: 64
-  horizon:
-    past_num: 0
-    future_num: 1
-    fill_with_last: true
-    gap: 0
   dict_tuple:
-    depth: 1
+    depth: 2
     separator: "."
     separate_key: false
-
-interactor:
-  _target_: configs.inter.get_interactor
+  parallel:
+    num_workers: 0
+    snapshot_frequency: 1000
 train:
   iteration:
     max_train_time: 20 # minutes

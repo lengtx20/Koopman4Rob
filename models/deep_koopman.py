@@ -143,8 +143,8 @@ class DeepKoopman(nn.Module):
 
     def add_first_batch(self, batch: DictBatch) -> None:
         # get the state and action dims
-        state_dim = batch["cur_state"].shape[1]
-        action_dim = batch["cur_action"].shape[1]
+        state_dim = batch["cur_state"].shape[-1]
+        action_dim = batch["cur_action"].shape[-1]
         print(f"[INFO] State dim: {state_dim}, Action dim: {action_dim}")
         config = self.config
         if config.state_dim == 0:
@@ -190,8 +190,8 @@ class DeepKoopman(nn.Module):
         self, batch: Dict[str, torch.Tensor], get_action: bool = False
     ) -> torch.Tensor:
         """Predict next state: x -> z -> z_next -> x_next"""
-        z = self.encode(batch["cur_state"])
-        z_next = self.linear_dynamics(z, batch["cur_action"])
+        z = self.encode(batch["cur_state"].squeeze(1))
+        z_next = self.linear_dynamics(z, batch["cur_action"].squeeze(1))
         return self.decode(z_next, get_action)
 
     def freeze_matrix(self):
