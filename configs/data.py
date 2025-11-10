@@ -4,6 +4,7 @@ from mcap_data_loader.datasets.mcap_dataset import (
     get_config_and_class_type,
     to_episodic_sequence,
 )
+from mcap_data_loader.utils.basic import get_full_class_name
 from config import DataLoaderConfig
 from pathlib import Path
 import torch
@@ -90,6 +91,13 @@ def get_data_loader_config(**kwargs) -> DataLoaderConfig:
 class LossCalculator:
     def __init__(self, name: str = "MSELoss"):
         self._func = getattr(torch.nn, name)()
+        self._name = name
 
     def __call__(self, predictions: torch.Tensor, batch_data: dict) -> torch.Tensor:
         return self._func(predictions, batch_data["next_state"].squeeze(1))
+
+    def dump(self):
+        return {
+            "_target_": get_full_class_name(self),
+            "name": self._name,
+        }

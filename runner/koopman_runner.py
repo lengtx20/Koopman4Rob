@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import datetime
 import json
+import yaml
 import time
 import shutil
 from tqdm import tqdm
@@ -20,6 +21,7 @@ from torch import optim
 from typing import Optional, Callable, Any
 from mcap_data_loader.utils.extra_itertools import first_recursive
 from mcap_data_loader.utils.array_like import get_tensor_device_auto
+from mcap_data_loader.basis.cfgable import dump_or_repr
 
 
 class KoopmanDataset(Dataset):
@@ -275,10 +277,8 @@ class KoopmanRunner:
             np.save(ckpt_dir / "vales.npy", np.array(self.vales))
             with open(ckpt_dir / "training_metrics.json", "w") as f:
                 json.dump(metrics, f, indent=4)
-            with open(ckpt_dir / "training_config.json", "w") as f:
-                json.dump(
-                    config.model_dump(mode="json", fallback=lambda x: None), f, indent=4
-                )
+            with open(ckpt_dir / "training_config.yaml", "w") as f:
+                yaml.dump(config.model_dump(mode="json", fallback=dump_or_repr), f)
             print(f"[Runner] Losses, vales and metrics saved to {ckpt_dir}")
         else:
             print("[INFO] No Koopman model saved")
