@@ -20,6 +20,7 @@ from airbot_data_collection.common.devices.cameras.mock import (
 # from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfigI
 
 from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+from mcap_data_loader.utils.basic import remove_util, Rate
 from pydantic import BaseModel
 from config import Config
 from collections import ChainMap
@@ -27,8 +28,8 @@ from data.mcap_data_utils import BatchStacker, BatchStackerConfig, DictBatch
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
 from interactor import InteractorBasis
 from pathlib import Path
-from pprint import pprint
-from typing import Literal
+from pprint import pformat
+from typing import Literal, List
 import torch
 
 
@@ -41,6 +42,10 @@ class ExtractorConfig(BaseModel):
     """Prompt for the BLIP2 model."""
     enable: bool = True
     """Whether to enable the feature extractor."""
+    keys_from: List[str]
+    """Keys to extract features from."""
+    keys_to: List[str] = []
+    """Keys to store extracted features."""
 
     def model_post_init(self, context):
         if not self.model_path.exists():
@@ -57,9 +62,11 @@ class InteractorConfig(BaseModel):
     open_loop_predict: bool = False
     """Whether to perform open-loop prediction during inference."""
     action_from: Literal["model", "data_loader", "none"] = "model"
-    """Whether to use actions from the data loader during inference.
-    If False, actions will be taken from the model."""
+    """Source of actions to send to the environment. 'model' uses model predictions,
+    'data_loader' uses actions from the data loader, and 'none' sends no actions"""
     model_input_from: Literal["env", "data_loader"] = "env"
+    """Source of model inputs. 'env' uses data from the environment, 
+    'data_loader' uses data from the data loader."""
     # show_image: bool = False
     # """Whether to display images during inference."""
     # image_transform: bool = False
@@ -69,32 +76,54 @@ class InteractorConfig(BaseModel):
 class Interactor(InteractorBasis):
     config: InteractorConfig
 
+    def _remove_prefix(self, keys: List[str]) -> List[str]:
+        return [remove_util(key, "/", True) for key in keys]
+
     def add_config(self, config: Config):
         stack_dl = config.data_loader.stack
+
         stack_env = {}
         for cat_key, keys in stack_dl.items():
             if "next" in cat_key:
                 continue
-            stack_env[cat_key] = []
-            for key in keys:
-                _, raw_key = key.split("/", 1)
-                stack_env[cat_key].append(raw_key)
-        self.use_extractor = self.config.extractor.enable
+            stack_env[cat_key] = [self._remove_prefix(row_keys) for row_keys in keys]
+        extract_cfg = self.config.extractor
+        self.use_extractor = extract_cfg.enable
+        model_input_from = self.config.model_input_from
+        print(f"{model_input_from=}")
         if self.use_extractor:
             self.extractor = Blip2ImageFeatureExtractor(
-                model_path=self.config.extractor.model_path
+                model_path=extract_cfg.model_path
             )
             self.extractor.load_model()
-            stack_based = (
-                stack_dl if self.config.model_input_from == "data_loader" else stack_env
-            )
+            stack_based = stack_dl if model_input_from == "data_loader" else stack_env
             torch_cat_keys = ("cur_action",)
             torch_stack = {key: stack_based[key] for key in torch_cat_keys}
             for key in torch_cat_keys:
                 stack_env.pop(key, None)
-            pprint(f"DataLoader stack:\n{stack_dl}")
-            pprint(f"Interactor torch_stack:\n{torch_stack}")
-        pprint(f"Interactor plain_stack:\n{stack_env}")
+            # torch batcher for extracted data (torch tensors)
+            self._torch_batcher = BatchStacker(
+                BatchStackerConfig(
+                    dtype=config.dtype,
+                    device=config.device,
+                    stack=torch_stack,
+                )
+            )
+            keys_from = extract_cfg.keys_from
+            keys_to = extract_cfg.keys_to
+            if model_input_from == "env":
+                keys_from = self._remove_prefix(keys_from)
+                keys_to = self._remove_prefix(keys_to)
+            self.from_keys = keys_from
+            self.to_keys = (
+                [f"{key}/features_proj" for key in self.from_keys]
+                if not keys_to
+                else keys_to
+            )
+            print(f"Extract from_keys: {self.from_keys}, to_keys: {self.to_keys}")
+            print(f"Interactor torch_stack:\n{pformat(torch_stack)}")
+        print(f"DataLoader stack:\n{pformat(stack_dl)}")
+        print(f"Environment stack:\n{pformat(stack_env)}")
         # np batcher for env data (numpy arrays)
         self._np_batcher = BatchStacker(
             BatchStackerConfig(
@@ -104,23 +133,8 @@ class Interactor(InteractorBasis):
                 backend_out="torch",
             )
         )
-        # torch batcher for extracted data (torch tensors)
-        self._torch_batcher = BatchStacker(
-            BatchStackerConfig(
-                dtype=config.dtype,
-                device=config.device,
-                stack=torch_stack,
-            )
-        )
-        image_keys = ["/env_camera/color/image_raw"]
-        self.from_keys = (
-            image_keys
-            if self.config.model_input_from == "env"
-            else [f"0{key}" for key in image_keys]
-        )
-        self.to_keys = [f"{key}/features_proj" for key in self.from_keys]
-        print(f"Extractor from_keys: {self.from_keys}, to_keys: {self.to_keys}")
         self._shared_config = config
+        self._rate = Rate(config.infer.frequency)
 
     def add_first_batch(self, batch: DictBatch):
         print(f"{list(batch.keys())=}")
@@ -130,7 +144,7 @@ class Interactor(InteractorBasis):
                     f"Interactor only supports batch size of 1. Got {length}."
                 )
         if batch:
-            reset_action = batch["cur_state"][0].tolist()
+            reset_action = batch["cur_state"][0][0].tolist()
         else:
             reset_action = None
         env = GroupedEnvironment(
@@ -166,11 +180,22 @@ class Interactor(InteractorBasis):
         self._action.action_values[0] = action
         self.env.input(self._action)
 
+    def _send_actions(self, actions: List[list]):
+        self._rate.reset()
+        for action in actions:
+            self._send_action(action)
+            self._rate.sleep()
+
     def _set_model_output(self, pred: torch.Tensor):
-        return self._send_action(pred[0].tolist())
+        # TODO: should we unify the pred to be BTD?
+        if len(pred.shape) == 2:
+            func = self._send_action
+        else:
+            func = self._send_actions
+        return func(pred[0].tolist())
 
     def _set_batch(self, batch: DictBatch):
-        return self._send_action(batch["cur_state"][0].tolist())
+        return self._send_actions(batch["cur_state"][0].tolist())
 
     def update(self, prediction: torch.Tensor, batch: DictBatch):
         if self.config.action_from == "data_loader":

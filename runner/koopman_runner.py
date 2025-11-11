@@ -108,6 +108,8 @@ class KoopmanRunner:
         sample_num = 0
         total_loss = 0
         loader = self._data_loaders[stage]
+        batch_losses = []
+
         if not loader:
             return None
 
@@ -141,6 +143,8 @@ class KoopmanRunner:
                 self.optimizer.step()
                 if manager.update_train_iter(batch_size):
                     break
+            elif stage == "test":
+                batch_losses.append(loss.item())
         avg_loss = total_loss / sample_num
         if stage == "train":
             if not manager.reasons:
@@ -161,8 +165,9 @@ class KoopmanRunner:
                     saved_fifo.append(model_path)
                     self.model.save(model_path)
                     print(f"[Runner] Model saved to {model_path}")
+            return avg_loss
         # print(f"Iteration {stage} took {time.monotonic() - start_time:.2f} seconds")
-        return avg_loss
+        return avg_loss, batch_losses
 
     def train(self):
         """
@@ -281,6 +286,12 @@ class KoopmanRunner:
                 json.dump(metrics, f, indent=4)
             with open(ckpt_dir / "training_config.yaml", "w") as f:
                 yaml.dump(config.model_dump(mode="json", fallback=dump_or_repr), f)
+            # to_yaml_file(
+            #     ckpt_dir / "training_config.yaml",
+            #     config,
+            #     add_comments=False,
+            #     fallback=dump_or_repr,
+            # )
             print(f"[Runner] Losses, vales and metrics saved to {ckpt_dir}")
         else:
             print("[INFO] No Koopman model saved")
@@ -308,7 +319,7 @@ class KoopmanRunner:
 
         start_time = time.monotonic()
         # ----- computing loss -----
-        avg_loss = self.iter_loader("test")
+        avg_loss, batch_losses = self.iter_loader("test")
         # ----- summary -----
         avg_rloss = np.sqrt(avg_loss)
         avg_rloss_deg = avg_rloss / np.pi * 180
@@ -317,6 +328,9 @@ class KoopmanRunner:
             "avg_loss": avg_loss,
             "avg_rloss": avg_rloss,
             "avg_rloss_deg": avg_rloss_deg,
+            "min_rloss_deg": np.sqrt(min(batch_losses)) / np.pi * 180,
+            "max_rloss_deg": np.sqrt(max(batch_losses)) / np.pi * 180,
+            "num_batches": len(batch_losses),
         }
         pprint(metrics_dict)
 

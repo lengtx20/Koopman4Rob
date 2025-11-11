@@ -3,3 +3,4 @@
 infer:
   frequency: -1
   # rollout_wait: null
+mode: infer
