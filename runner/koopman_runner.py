@@ -194,7 +194,7 @@ class KoopmanRunner:
         print(f"[Runner] Training started: {start_time}...")
         manager.start()
         try:
-            for epoch_i, epoch in enumerate(epoch_bar):
+            for epoch in epoch_bar:
                 train_loss = self.iter_loader("train", manager)
                 train_reasons = manager.reasons
                 val_loss = self.iter_loader("val", manager)
@@ -237,16 +237,18 @@ class KoopmanRunner:
                     break
         except KeyboardInterrupt:
             manager.reasons.add("KeyboardInterrupt")
+            epoch -= 1
         print(f"Stop reasons: {manager.reasons}")
 
         total_time = (time.monotonic() - start_time) / 60.0  # in minutes
-        total_time_per_epoch = total_time / (epoch_i + 1)
+        total_time_per_epoch = total_time / (epoch + 1)
         batch_size = config.data_loader.batch_size
         metrics = {
             "time_stamp": {
                 "start": start_timestamp,
                 "end": datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
             },
+            "epochs": epoch + 1,
             "model_size_mb": get_model_size(self.model),
             "total_time_minutes": total_time,
             "total_time_minutes_per_epoch": total_time_per_epoch,

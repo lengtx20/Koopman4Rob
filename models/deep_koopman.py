@@ -2,11 +2,11 @@
 
 import torch
 import torch.nn as nn
-import json
 from class_resolver.contrib.torch import activation_resolver
 from typing import Dict, Optional, List, Literal
 from pathlib import Path
 from pydantic import BaseModel, NonNegativeInt, PositiveInt, ConfigDict
+from pydantic_yaml import to_yaml_file, parse_yaml_file_as
 from data.mcap_data_utils import DictBatch
 
 
@@ -140,6 +140,7 @@ class DeepKoopman(nn.Module):
     def __init__(self, config: DeepKoopmanConfig):
         super().__init__()
         self.config = config
+        self._config_name = "config.yaml"
 
     def add_first_batch(self, batch: DictBatch) -> None:
         # get the state and action dims
@@ -209,17 +210,14 @@ class DeepKoopman(nn.Module):
         torch.save(self.B.data, path / "B.pth")
         if not self.config.iden_decoder:
             torch.save(self.decoder.state_dict(), path / "decoder.pth")
-        json.dump(self.config.model_dump(), open(path / "hparams.json", "w"))
+        to_yaml_file(path / self._config_name, self.config)
 
     def load(self, path: Optional[Path] = None):
         """Load weights while preserving the current device and dtype."""
         if path is not None:
-            try:
-                self.config = DeepKoopmanConfig(
-                    **json.load(open(path / "hparams.json", "r"))
-                )
-            except Exception as e:
-                print(e)
+            self.config = parse_yaml_file_as(
+                DeepKoopmanConfig, path / self._config_name
+            )
         config = self.config
         self.encoder = Encoder(
             config.state_dim,

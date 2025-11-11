@@ -37,5 +37,5 @@ accelerate = "*"
 # typing_extensions = ">=4.15.0,<5"
 
 [pypi-dependencies]
-mcap-data-loader = { git = "https://github.com/OpenGHz/MCAP-DataLoader.git", rev = "fd1f6a6436477a941a5ea2075e829e34a6298e8e" }
+mcap-data-loader = { git = "https://github.com/OpenGHz/MCAP-DataLoader.git", rev = "b3b33850918aa1526757c4b3ae8e91a3416709f8" }
 typing_extensions = "==4.15.0"
