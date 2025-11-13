@@ -2,14 +2,21 @@
 
 from runner.koopman_runner import KoopmanRunner
 from config import Config
+from hydra_zen import instantiate, store
+import hydra
+import logging
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("main")
 
 
 def run(config: Config):
     runner = KoopmanRunner(config, None, None)
-    mode = config.mode
+    stage = config.stage
     model_dir = config.checkpoint_path
-    print(f"[INFO] Mode: {mode}. Model dir: {model_dir}")
-    if mode == "train":
+    logger.info(f"{stage=}, {model_dir=}")
+    if stage == "train":
         # automatically change model dir if exists
         if model_dir.exists():
             ids = [int(p.stem) for p in model_dir.parent.iterdir() if p.stem.isdigit()]
@@ -17,26 +24,26 @@ def run(config: Config):
             model_dir = model_dir.parent / f"{next_id}{model_dir.suffix}"
         model_dir.mkdir(parents=True)
         config.checkpoint_path = model_dir
-    runner.run(mode)
+    runner.run(stage)
 
 
-if __name__ == "__main__":
-    import hydra
-    from hydra_zen import instantiate, store
-
+def main():
     config_name = "class_config"
     store(Config, name=config_name)
     store.add_to_hydra_store()
 
-    # logging.basicConfig(level=logging.INFO)
     config_path = "configs"
     config_name = "config"
     config = None
 
     def convert(cfg):
-        global config
+        nonlocal config
         config = instantiate(cfg)
 
     hydra.main(config_path or None, config_name, None)(convert)()
     if config:
         run(Config(**config))
+
+
+if __name__ == "__main__":
+    main()

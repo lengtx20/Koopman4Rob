@@ -43,7 +43,7 @@ class KoopmanRunner:
         config.device = get_tensor_device_auto(config.device)
         self.device = torch.device(config.device)
         self.loss_fn: Callable[[Any, Any], torch.Tensor] = config.loss_fn
-        self.mode = config.mode
+        self.mode = config.stage
         self.ewc_model = config.ewc_model
         self.train_data = train_data
         self.val_data = val_data
@@ -72,11 +72,11 @@ class KoopmanRunner:
             if interactor is not None:
                 interactor.add_config(self.config)
                 interactor.add_first_batch(first_batch)
-        elif config.mode != "infer":
+        elif config.stage != "infer":
             train_loader = DataLoader(
                 KoopmanDataset(train_data),
                 batch_size=batch_size,
-                shuffle=(True and config.mode == "train"),
+                shuffle=(True and config.stage == "train"),
                 num_workers=num_workers,
             )
             val_loader = (

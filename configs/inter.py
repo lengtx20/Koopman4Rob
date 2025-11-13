@@ -138,7 +138,7 @@ class Interactor(InteractorBasis):
 
     def add_first_batch(self, batch: DictBatch):
         print(f"{list(batch.keys())=}")
-        if self._shared_config.mode == "infer":
+        if self._shared_config.stage == "infer":
             if (length := len(batch["cur_state"])) != 1:
                 raise ValueError(
                     f"Interactor only supports batch size of 1. Got {length}."

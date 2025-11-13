@@ -1,0 +1,13 @@
+# @package _global_
+
+datasets:
+  _target_: mcap_data_loader.datasets.mcap_dataset.McapMultiEpisodeDatasets
+  common:
+    strict: false
+    rearrange:
+      dataset: sort_stem_digital
+  roots:
+    mcap_data/reach3tags:
+      - ${extra.arm_state}
+    mcap_data/reach3tags_blip2_features:
+      - ${extra.env_color_feat}

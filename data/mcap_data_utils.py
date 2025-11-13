@@ -59,7 +59,7 @@ def create_dataloader(
         source_node = nodes.IterableWrapper(dict_tupled)
         source_nodes[index] = source_node
         weights[index] = dl_cfg.weights[index] if dl_cfg.weights else 1.0
-    if config.mode == "infer" or len(source_nodes) == 1:
+    if config.stage == "infer" or len(source_nodes) == 1:
         indexed_nodes = source_nodes
     else:
         indexed_nodes = {
@@ -72,7 +72,7 @@ def create_dataloader(
         }
 
     all_loaders = []
-    if config.mode == "infer":
+    if config.stage == "infer":
         print("Changing batch size to 1 for inference.")
         dl_cfg.batch_size = 1
     for index, base_node in indexed_nodes.items():
@@ -89,12 +89,12 @@ def create_dataloader(
             # )
         loader = nodes.Loader(node, dl_cfg.restart_on_stop_iteration)
         all_loaders.append(loader)
-    return all_loaders[0] if config.mode != "infer" else all_loaders
+    return all_loaders[0] if config.stage != "infer" else all_loaders
 
 
 def create_dataloaders(config: Config) -> Dict[str, nodes.Loader[DictBatch]]:
     print("Creating data loaders...")
-    if config.mode == "train":
+    if config.stage == "train":
         splited_datasets = {"train": [], "val": []}
         for dataset in config.datasets:
             sample_datasets = list(dataset)
@@ -111,7 +111,7 @@ def create_dataloaders(config: Config) -> Dict[str, nodes.Loader[DictBatch]]:
             splited_datasets["train"].append(train)
             splited_datasets["val"].append(val)
     else:
-        splited_datasets = {config.mode: list(config.datasets)}
+        splited_datasets = {config.stage: list(config.datasets)}
     pprint(splited_datasets)
     print("checking the names and lengths are matching...")
     data_loaders = {}

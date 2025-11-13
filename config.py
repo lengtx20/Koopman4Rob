@@ -6,26 +6,16 @@ from pydantic import (
     ConfigDict,
     Field,
 )
-from typing import (
-    List,
-    Optional,
-    Literal,
-    Any,
-    Set,
-    Dict,
-    Union,
-    Tuple,
-    Callable,
-    Iterable,
-)
+from typing import List, Optional, Literal, Any, Set, Dict, Union, Tuple
+from collections.abc import Callable
 from functools import cache
 from pathlib import Path
-from mcap_data_loader.utils.basic import NonIteratorIterable
 from mcap_data_loader.pipelines import HorizonConfig, PairWiseConfig
 from interactor import InteractorBasis
 from basis import ModelLike
 from mcap_data_loader.callers.stack import StackType
 from mcap_data_loader.callers.dict_tuple import DictTupleConfig
+from mcap_data_loader.datasets.dataset import IterableMultiEpisodeDatasetsProtocol
 
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
@@ -95,8 +85,8 @@ class CommonConfig(BaseModel):
     These configurations are applicable to both training and testing
     """
 
-    mode: Literal["train", "test", "infer"]
-    """Mode of stage: 'train', 'test', or 'infer'."""
+    stage: Literal["train", "test", "infer"]
+    """Stage of the task."""
     root_dir: Path = Path("logs")
     """Root directory for saving logs and checkpoints."""
     checkpoints_dir: Path = Path("checkpoints")
@@ -309,8 +299,8 @@ class Config(CommonConfig):
         validate_assignment=True, extra="forbid", arbitrary_types_allowed=True
     )
 
-    datasets: Iterable[NonIteratorIterable] = Field(min_length=1)
-    """Configuration for the dataset."""
+    datasets: IterableMultiEpisodeDatasetsProtocol
+    """Datasets for training/testing/inference."""
     data_loader: DataLoaderConfig
     """Configuration for the data loader."""
     model: ModelLike

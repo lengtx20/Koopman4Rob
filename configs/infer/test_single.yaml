@@ -14,4 +14,4 @@ interactor:
   open_loop_predict: false
   action_from: data_loader
   model_input_from: data_loader
-mode: infer
+stage: infer

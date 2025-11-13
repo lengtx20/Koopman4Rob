@@ -1,7 +1,9 @@
 defaults:
   - _self_
   - model: single
+  - dataset: train
 
+stage: train
 extra:
   arm_state: /follow/arm/joint_state/position
   eef_state: /follow/eef/joint_state/position
@@ -11,9 +13,6 @@ extra:
     - ${extra.env_color}
   image_feat_keys:
     - ${extra.env_color_feat}
-datasets:
-  _target_: configs.data.get_datasets
-  data_name: reach3tags
 data_loader:
   # _target_: configs.data.get_data_loader_config
   batch_size: 64
@@ -36,4 +35,4 @@ train:
       interval: 1
   train_val_split: [2, 1]
 loss_fn:
-  _target_: configs.data.LossCalculator
+  _target_: configs.cfg.LossCalculator
