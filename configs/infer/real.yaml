@@ -1,3 +1,16 @@
 # @package _global_
 
-stage: infer
+defaults:
+  - basis
+
+infer:
+  frequency: 0
+  rollout_wait: input
+
+interactor:
+  extractor:
+    enable: true
+  enable: true
+  open_loop_predict: true
+  action_from: env
+  model_input_from: env

@@ -12,6 +12,6 @@ interactor:
     keys_from:
       - 0${extra.env_color}
   open_loop_predict: false
-  action_from: data_loader
+  action_from: none
   model_input_from: data_loader
 stage: infer

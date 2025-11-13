@@ -44,6 +44,7 @@ datasets = [dataset1, dataset2]
 - 平台（sim or real）推理（链式）：使用数据集中的或给定的初始状态或动作对具体平台初始化，然后通过平台接口获取后续的状态反馈，将模型预测的动作通过相关接口执行，评估模型在该平台上的性能。
   - 开环：将模型的预测的动作作为模型的下一个状态输入（除了平台初始化）。适用于动作和状态物理意义相同的情况。
   - 闭环：将平台反馈的状态作为模型的下一个状态输入。
+- 单/多模型推理：推理时可以使用单一模型或将多个模型集成（拼接、综合等）使用。
 
 各种推理的配置文件位于`configs/infer`目录下，默认使用`test_single.yaml`进行数据集推理。推理的通用配置位于`config.yaml`中的`infer`字段，详细说明可参考`config.py`中`InferConfig`类的注释。此外，为了支持各种平台和不同的推理方式，额外增加了一个`interactor`字段，用于配置具体的定制化的交互器，默认类位于`configs.inter.Interactor`，可供参考。
 
@@ -81,6 +82,28 @@ python3 main.py stage=test +checkpoint_path=0/best
 
 ## 推理
 
+以默认配置举例：
+
+### 数据集推理
+
+- 不执行动作
 ```bash
-python3 main.py +infer=test_single +checkpoint_path=0/best
+python3 main.py +infer=basis +checkpoint_path=0/best
+```
+
+- 执行动作
+```bash
+python3 main.py +infer=basis interactor.action_from=data_loader +checkpoint_path=0/best
+```
+
+### 平台推理
+
+- 开环
+```bash
+python3 main.py +infer=real +checkpoint_path=0/best
+```
+
+- 闭环
+```bash
+python3 main.py +infer=real interactor.open_loop_predict=false +checkpoint_path=0/best
 ```
