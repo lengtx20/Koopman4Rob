@@ -23,11 +23,11 @@ dataset1 = [dataset1_episode1, ...]
 dataset2 = [dataset2_episode1, ...]
 datasets = [dataset1, dataset2]
 ```
-则在加载后，每个数据字典将包含`'robot/state'`和`'camera/image'`两个key。其中key分为state和action两类，分别对应系统状态和控制输入，可以参考`configs/data.py`中对`DataLoaderConfig`的配置。每个类中可以指定多个key，加载时会按顺序将对应的数组拼接在一起作为模型最终的状态和动作输入。
+则在加载后，每个数据字典将包含`'robot/state'`和`'camera/image'`两个key。
 
 ### 模型配置
 
-模型的默认配置位于`configs/model/single.yaml`文件，其中使用了自定义的`DeepKoopman`，全部配置项参考`DeepKoopmanConfig`配置类，其中`state_dim`和`action_dim`分别对应系统状态和控制输入的维度，默认通过数据进行推断，故省略配置。通常，不同的模型结构会对`DataLoader`有相应的要求，因此，在模型配置文件中可以额外增加`data_loader`字段以覆盖默认的主配置。
+模型的默认配置位于`configs/model/single.yaml`文件，其中使用了自定义的`DeepKoopman`，全部配置项参考`DeepKoopmanConfig`配置类，其中`state_dim`和`action_dim`分别对应系统状态和控制输入的维度，默认通过数据进行推断，故省略配置。通常，不同的模型结构会对`DataLoader`有相应的要求，因此，在模型配置文件中可以额外增加`data_loader`字段以覆盖默认的主配置。其中`stack`字段用于对数据进行按行、列堆叠处理，通常用于对不同种类的数据进行拼接，以及构建时间序列。
 
 
 ### 训练配置
@@ -68,7 +68,7 @@ python3 main.py
 python3 main.py data_loader.batch_size=128
 ```
 
-训练可以随时通过`Ctrl+C`中断，模型检查点会自动保存到`logs/checkpoints/<ID>`目录下，默认会产生`best`，`last`，以及若干位于`val_loss`目录下以实际验证损失命名的检查点。
+训练可以随时通过`CTRL+C`中断，模型检查点会自动保存到`logs/checkpoints/<ID>`目录下，默认会产生`best`，`last`，以及若干位于`val_loss`目录下以实际验证损失命名的检查点。
 
 ## 测试
 
