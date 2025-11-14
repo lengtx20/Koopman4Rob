@@ -10,7 +10,6 @@ infer:
 interactor:
   extractor:
     enable: true
-  enable: true
   open_loop_predict: true
-  action_from: env
+  action_from: model
   model_input_from: env

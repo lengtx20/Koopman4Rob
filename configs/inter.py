@@ -1,7 +1,7 @@
 from airbot_data_collection.common.systems.basis import SystemMode
-from airbot_data_collection.common.environments.grouped import (
-    GroupedEnvironment,
-    GroupedEnvironmentConfig,
+from airbot_data_collection.common.live_data.grouped import (
+    GroupedSystemDataSourceConfig,
+    GroupedSystemDataSource,
     GroupsSendActionConfig,
 )
 from airbot_data_collection.common.systems.grouped import (
@@ -20,7 +20,8 @@ from airbot_data_collection.common.devices.cameras.mock import (
 # from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfigI
 
 from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
-from mcap_data_loader.utils.basic import remove_util, Rate
+from mcap_data_loader.utils.basic import remove_util, Rate, InputSleeper
+from mcap_data_loader.callers.dict_map import DictMap, DictMapConfig
 from pydantic import BaseModel
 from config import Config
 from collections import ChainMap
@@ -30,6 +31,7 @@ from interactor import InteractorBasis
 from pathlib import Path
 from pprint import pformat
 from typing import Literal, List
+from more_itertools import collapse
 import torch
 
 
@@ -102,7 +104,7 @@ class Interactor(InteractorBasis):
             for key in torch_cat_keys:
                 stack_env.pop(key, None)
             # torch batcher for extracted data (torch tensors)
-            self._torch_batcher = BatchStacker(
+            self._extra_batcher = BatchStacker(
                 BatchStackerConfig(
                     dtype=config.dtype,
                     device=config.device,
@@ -125,7 +127,7 @@ class Interactor(InteractorBasis):
         print(f"DataLoader stack:\n{pformat(stack_dl)}")
         print(f"Environment stack:\n{pformat(stack_env)}")
         # np batcher for env data (numpy arrays)
-        self._np_batcher = BatchStacker(
+        self._env_batcher = BatchStacker(
             BatchStackerConfig(
                 dtype=config.dtype,
                 device=config.device,
@@ -134,7 +136,22 @@ class Interactor(InteractorBasis):
             )
         )
         self._shared_config = config
-        self._rate = Rate(config.infer.frequency)
+        self._rate = (
+            InputSleeper()
+            if config.infer.frequency == 0
+            else Rate(config.infer.frequency)
+        )
+        self._env_keys = set(collapse(stack_env.values()))
+        self._dic_map = DictMap(
+            DictMapConfig(
+                dtype=config.dtype,
+                device=config.device,
+                # TODO: torch will be much faster
+                backend_out="torch",
+                keys_include=self._env_keys,
+                replace=True,
+            )
+        )
 
     def add_first_batch(self, batch: DictBatch):
         print(f"{list(batch.keys())=}")
@@ -147,8 +164,8 @@ class Interactor(InteractorBasis):
             reset_action = batch["cur_state"][0][0].tolist()
         else:
             reset_action = None
-        env = GroupedEnvironment(
-            GroupedEnvironmentConfig(
+        live_data = GroupedSystemDataSource(
+            GroupedSystemDataSourceConfig(
                 components=SystemSensorComponentGroupsConfig(
                     groups=["/"] * 2,
                     names=["follow", "env_camera"],
@@ -166,10 +183,10 @@ class Interactor(InteractorBasis):
                 auto_control=AutoControlConfig(groups=[]),
             )
         )
-        if not env.configure():
-            raise RuntimeError("Failed to configure the interactor environment.")
-        env.reset()
-        self.env = env
+        # if not live_data.configure():
+        #     raise RuntimeError("Failed to configure the interactor environment.")
+        live_data.reset()
+        self.live_data = live_data
         self._action = GroupsSendActionConfig(
             groups=["/"],
             action_values=[[]],
@@ -178,7 +195,7 @@ class Interactor(InteractorBasis):
 
     def _send_action(self, action: list):
         self._action.action_values[0] = action
-        self.env.input(self._action)
+        self.live_data.write(self._action)
 
     def _send_actions(self, actions: List[list]):
         self._rate.reset()
@@ -203,13 +220,16 @@ class Interactor(InteractorBasis):
         elif self.config.action_from == "model":
             self._set_model_output(prediction)
 
+    def get_env_data(self) -> DictBatch:
+        return self._dic_map(self.live_data.read())
+
     def get_model_input(
         self, last_prediction: torch.Tensor, batch: DictBatch
     ) -> DictBatch:
         data = (
             batch
             if self.config.model_input_from == "data_loader"
-            else self._np_batcher([self.env.output().observation])
+            else self._env_batcher([self.get_env_data()])
         )
         if self.config.open_loop_predict and last_prediction is not None:
             data["cur_state"] = last_prediction
@@ -222,9 +242,9 @@ class Interactor(InteractorBasis):
                     )["features_proj"].squeeze(0)
                 }
             # print(f"{features.keys()=}")
-            batched_features = self._torch_batcher([features])
+            batched_features = self._extra_batcher([features])
             return ChainMap(batched_features, data)
         return data
 
     def shutdown(self):
-        return self.env.shutdown()
+        return self.live_data.close()

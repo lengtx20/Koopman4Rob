@@ -6,7 +6,6 @@ conda activate koopman4rob
 pip3 install -r requirements.txt
 ```
 
-
 ## 配置
 
 在 `configs/config.yaml` 中配置各种参数，全部可配置参数请参考 `config.py`中的各种配置类（符合hydra规范）。
