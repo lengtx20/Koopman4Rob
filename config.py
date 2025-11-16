@@ -22,7 +22,7 @@ IterUnit = Literal["epoch", "step", "sample", "minute"]
 MODEL_CONFIG = ConfigDict(validate_assignment=True, extra="forbid")
 
 
-class ParallelConfig(BaseModel):
+class ParallelConfig(BaseModel, frozen=True):
     """Configuration for parallel processing.
     The data will be processed in parallel either in num_workers threads or
     processes. At most one iter() is created from source, and at most one
@@ -47,7 +47,7 @@ class ParallelConfig(BaseModel):
     """Frequency (in number of samples) to take snapshots of the parallel processing."""
 
 
-class DataLoaderConfig(BaseModel):
+class DataLoaderConfig(BaseModel, frozen=True):
     """Configuration for data loader."""
 
     model_config = MODEL_CONFIG
@@ -118,7 +118,7 @@ class CommonConfig(BaseModel):
         self.tb_log_dir = process_path(self.tb_log_dir)
 
 
-class TestConfig(BaseModel):
+class TestConfig(BaseModel, frozen=True):
     """Configuration for testing."""
 
     save_results: bool = True
@@ -129,7 +129,7 @@ class TestConfig(BaseModel):
     """Number of steps for rollout prediction (>=1)."""
 
 
-class KeyConditionConfig(BaseModel):
+class KeyConditionConfig(BaseModel, frozen=True):
     """Configuration for specifying stopping criteria based on keys."""
 
     necessary: Set[str] = set()
@@ -142,7 +142,7 @@ class KeyConditionConfig(BaseModel):
         return self.necessary | self.sufficient
 
 
-class IntermittentConfig(BaseModel):
+class IntermittentConfig(BaseModel, frozen=True):
     """Configuration for interval-based operations."""
 
     unit: IterUnit = "minute"
@@ -160,7 +160,7 @@ class SnapshotConfig(IntermittentConfig):
     """Set of metric keys to include in the snapshot."""
 
 
-class TrainIterationConfig(BaseModel):
+class TrainIterationConfig(BaseModel, frozen=True):
     """Configuration for training iteration.
 
     This class defines various stopping and continuation criteria for a training loop.
@@ -237,7 +237,7 @@ class TrainIterationConfig(BaseModel):
         return keys
 
 
-class SaveModelConfig(BaseModel):
+class SaveModelConfig(BaseModel, frozen=True):
     """Configuration for saving the model."""
 
     period: Optional[IntermittentConfig] = None
@@ -252,7 +252,7 @@ class SaveModelConfig(BaseModel):
             raise ValueError("Length of on_improve and maximum must be the same")
 
 
-class TrainConfig(BaseModel):
+class TrainConfig(BaseModel, frozen=True):
     """Configuration for training."""
 
     model_config = MODEL_CONFIG
@@ -276,7 +276,7 @@ class TrainConfig(BaseModel):
     """
 
 
-class InferConfig(BaseModel):
+class InferConfig(BaseModel, frozen=True):
     """Configuration for inference."""
 
     model_config = MODEL_CONFIG

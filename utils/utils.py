@@ -1,6 +1,7 @@
 import numpy as np
 import statistics
 from scipy.interpolate import make_interp_spline
+from typing import Optional
 
 
 def smooth_curve(x, y, points=300):
@@ -27,7 +28,9 @@ def process_mse_losses(losses: list) -> dict:
     return loss_stat
 
 
-def set_seed(seed):
+def set_seed(seed: Optional[int]):
+    if seed is None:
+        return
     import random
     import numpy as np
     import torch

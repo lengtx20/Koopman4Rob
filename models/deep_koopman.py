@@ -6,8 +6,8 @@ from class_resolver.contrib.torch import activation_resolver
 from typing import Dict, Optional, List, Literal
 from pathlib import Path
 from pydantic import BaseModel, NonNegativeInt, PositiveInt, ConfigDict
-from pydantic_yaml import to_yaml_file, parse_yaml_file_as
 from data.mcap_data_utils import DictBatch
+from mcap_data_loader.basis.cfgable import InitConfigMixin
 
 
 class Encoder(nn.Module):
@@ -111,7 +111,7 @@ class Decoder(nn.Module):
         )
 
 
-class DeepKoopmanConfig(BaseModel):
+class DeepKoopmanConfig(BaseModel, frozen=True):
     """Configuration for the model."""
 
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
@@ -136,7 +136,7 @@ class DeepKoopmanConfig(BaseModel):
     """Path to save/load Fisher information matrix for EWC."""
 
 
-class DeepKoopman(nn.Module):
+class DeepKoopman(nn.Module, InitConfigMixin):
     def __init__(self, config: DeepKoopmanConfig):
         super().__init__()
         self.config = config
@@ -144,14 +144,19 @@ class DeepKoopman(nn.Module):
 
     def add_first_batch(self, batch: DictBatch) -> None:
         # get the state and action dims
-        state_dim = batch["cur_state"].shape[-1]
-        action_dim = batch["cur_action"].shape[-1]
-        print(f"[INFO] State dim: {state_dim}, Action dim: {action_dim}")
         config = self.config
-        if config.state_dim == 0:
-            config.state_dim = state_dim
-        if config.action_dim == 0:
-            config.action_dim = action_dim
+        state_dim = (
+            config.state_dim if config.state_dim > 0 else batch["cur_state"].shape[-1]
+        )
+        action_dim = (
+            config.action_dim
+            if config.action_dim > 0
+            else batch["cur_action"].shape[-1]
+        )
+        self.config = config.model_copy(
+            update={"state_dim": state_dim, "action_dim": action_dim}
+        )
+        print(f"[INFO] State dim: {state_dim}, Action dim: {action_dim}")
 
     def _init_matrix(self, a=None, b=None):
         lifted_dim = self.config.lifted_dim
@@ -210,14 +215,12 @@ class DeepKoopman(nn.Module):
         torch.save(self.B.data, path / "B.pth")
         if not self.config.iden_decoder:
             torch.save(self.decoder.state_dict(), path / "decoder.pth")
-        to_yaml_file(path / self._config_name, self.config)
+        self.save_config(path / self._config_name)
 
     def load(self, path: Optional[Path] = None):
         """Load weights while preserving the current device and dtype."""
         if path is not None:
-            self.config = parse_yaml_file_as(
-                DeepKoopmanConfig, path / self._config_name
-            )
+            self = type(self)(path / self._config_name)
         config = self.config
         self.encoder = Encoder(
             config.state_dim,

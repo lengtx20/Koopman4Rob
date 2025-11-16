@@ -20,17 +20,17 @@ from airbot_data_collection.common.devices.cameras.mock import (
 # from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfigI
 
 from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
-from mcap_data_loader.utils.basic import remove_util, Rate, InputSleeper
+from mcap_data_loader.utils.basic import remove_util
 from mcap_data_loader.callers.dict_map import DictMap, DictMapConfig
 from pydantic import BaseModel
 from config import Config
 from collections import ChainMap
 from data.mcap_data_utils import BatchStacker, BatchStackerConfig, DictBatch
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
-from interactor import InteractorBasis
+from interactor import InteractorBasis, YieldKey
 from pathlib import Path
 from pprint import pformat
-from typing import Literal, List
+from typing import Literal, List, Optional
 from more_itertools import collapse
 import torch
 
@@ -136,11 +136,6 @@ class Interactor(InteractorBasis):
             )
         )
         self._shared_config = config
-        self._rate = (
-            InputSleeper()
-            if config.infer.frequency == 0
-            else Rate(config.infer.frequency)
-        )
         self._env_keys = set(collapse(stack_env.values()))
         self._dic_map = DictMap(
             DictMapConfig(
@@ -152,18 +147,10 @@ class Interactor(InteractorBasis):
                 replace=True,
             )
         )
+        self._init_live_data()
 
-    def add_first_batch(self, batch: DictBatch):
-        print(f"{list(batch.keys())=}")
-        if self._shared_config.stage == "infer":
-            if (length := len(batch["cur_state"])) != 1:
-                raise ValueError(
-                    f"Interactor only supports batch size of 1. Got {length}."
-                )
-        if batch:
-            reset_action = batch["cur_state"][0][0].tolist()
-        else:
-            reset_action = None
+    def _init_live_data(self):
+        # TODO: make the live data configuration more flexible
         live_data = GroupedSystemDataSource(
             GroupedSystemDataSourceConfig(
                 components=SystemSensorComponentGroupsConfig(
@@ -174,11 +161,6 @@ class Interactor(InteractorBasis):
                         AIRBOTPlay(AIRBOTPlayConfig()),
                         Camera(CameraConfig(camera_index=None)),
                     ],
-                ),
-                reset_action=GroupsSendActionConfig(
-                    groups=["/"] if reset_action else [],
-                    action_values=[reset_action],
-                    modes=[SystemMode.RESETTING],
                 ),
                 auto_control=AutoControlConfig(groups=[]),
             )
@@ -193,15 +175,29 @@ class Interactor(InteractorBasis):
             modes=[SystemMode.SAMPLING],
         )
 
+    def add_first_batch(self, batch: DictBatch):
+        print(f"{list(batch.keys())=}")
+        if self._shared_config.stage == "infer":
+            if (length := len(batch["cur_state"])) != 1:
+                raise ValueError(
+                    f"Interactor only supports batch size of 1. Got {length}."
+                )
+        if batch:
+            reset_action = GroupsSendActionConfig(
+                groups=["/"],
+                action_values=[batch["cur_state"][0][0].tolist()],
+                modes=[SystemMode.RESETTING],
+            )
+            self.live_data.write(reset_action)
+
     def _send_action(self, action: list):
         self._action.action_values[0] = action
         self.live_data.write(self._action)
+        _ = yield
 
     def _send_actions(self, actions: List[list]):
-        self._rate.reset()
         for action in actions:
-            self._send_action(action)
-            self._rate.sleep()
+            yield from self._send_action(action)
 
     def _set_model_output(self, pred: torch.Tensor):
         # TODO: should we unify the pred to be BTD?
@@ -214,18 +210,22 @@ class Interactor(InteractorBasis):
     def _set_batch(self, batch: DictBatch):
         return self._send_actions(batch["cur_state"][0].tolist())
 
-    def update(self, prediction: torch.Tensor, batch: DictBatch):
+    def interact(self, value):
+        # first request for the model prediction
+        prediction, batch = yield ((YieldKey.PREDICT, self.get_model_input(*value)),)
+        # then send actions based on the prediction and batches
         if self.config.action_from == "data_loader":
-            self._set_batch(batch)
+            yield from self._set_batch(batch)
         elif self.config.action_from == "model":
-            self._set_model_output(prediction)
+            yield from self._set_model_output(prediction)
 
     def get_env_data(self) -> DictBatch:
         return self._dic_map(self.live_data.read())
 
     def get_model_input(
-        self, last_prediction: torch.Tensor, batch: DictBatch
+        self, last_prediction: Optional[torch.Tensor], batch: DictBatch
     ) -> DictBatch:
+        print(f"{batch['cur_state']=}, {batch['next_state']=}")
         data = (
             batch
             if self.config.model_input_from == "data_loader"

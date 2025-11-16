@@ -14,6 +14,8 @@ from mcap_data_loader.pipelines import (
     Map,
     MapConfig,
     PairWise,
+    Slice,
+    SliceConfig,
 )
 from mcap_data_loader.callers.stack import BatchStacker, BatchStackerConfig, DictBatch
 from mcap_data_loader.callers import DictTuple
@@ -26,6 +28,7 @@ def create_dataloader(
     config: Config, datasets: list
 ) -> Union[nodes.Loader, List[nodes.Loader]]:
     dl_cfg = config.data_loader
+    stage = config.stage
     batch_stacker = BatchStacker(
         BatchStackerConfig(
             dtype=config.dtype,
@@ -39,27 +42,37 @@ def create_dataloader(
     nested = NestedZip[McapFlatBuffersEpisodeDataset](NestedZipConfig(depth=1))(
         datasets
     )
+    if dl_cfg.horizon is not None:
+        tupler_cfg = dl_cfg.horizon
+        tupler_cls = Horizon
+        dict_tuple_depth = 2
+        step = dl_cfg.horizon.future_span
+    elif dl_cfg.pairwise is not None:
+        tupler_cfg = dl_cfg.pairwise
+        tupler_cls = PairWise
+        dict_tuple_depth = 1
+        step = dl_cfg.pairwise.gap + 1
     source_nodes = {}
     weights = {}
     for index, zipped_episodes in enumerate(nested):
         # merge the zipped episodes
-        merged = Merge(MergeConfig(method="ChainMap"))(zipped_episodes)
-        if dl_cfg.horizon is not None:
-            tupled = Horizon(dl_cfg.horizon)(merged)
-            depth = 2
-        elif dl_cfg.pairwise is not None:
-            tupled = PairWise(dl_cfg.pairwise)(merged)
-            depth = 1
+        merged = Merge(MergeConfig(replace=True))(zipped_episodes)
+        tupled = tupler_cls(tupler_cfg)(merged)
+        if config.stage == "infer":
+            final_pipe = Slice(SliceConfig(step=step))(tupled)
         else:
-            raise ValueError(
-                "Either horizon or pairwise configuration must be provided."
+            final_pipe = tupled
+        dict_tupled = Map(
+            MapConfig(
+                callable=DictTuple(
+                    dl_cfg.dict_tuple.model_copy(update={"depth": dict_tuple_depth})
+                )
             )
-        dl_cfg.dict_tuple.depth = depth
-        dict_tupled = Map(MapConfig(callable=DictTuple(dl_cfg.dict_tuple)))(tupled)
+        )(final_pipe)
         source_node = nodes.IterableWrapper(dict_tupled)
         source_nodes[index] = source_node
         weights[index] = dl_cfg.weights[index] if dl_cfg.weights else 1.0
-    if config.stage == "infer" or len(source_nodes) == 1:
+    if stage == "infer" or len(source_nodes) == 1:
         indexed_nodes = source_nodes
     else:
         indexed_nodes = {
@@ -70,13 +83,12 @@ def create_dataloader(
                 seed=config.seed,
             )
         }
-
     all_loaders = []
-    if config.stage == "infer":
-        print("Changing batch size to 1 for inference.")
-        dl_cfg.batch_size = 1
+    batch_size = dl_cfg.batch_size
+    if stage == "infer":
+        batch_size = 1
     for index, base_node in indexed_nodes.items():
-        node = nodes.Batcher(base_node, dl_cfg.batch_size, dl_cfg.drop_last)
+        node = nodes.Batcher(base_node, batch_size, dl_cfg.drop_last)
         node = nodes.ParallelMapper(node, batch_stacker, **dl_cfg.parallel.model_dump())
         if dl_cfg.pin_memory_device is not None:
             raise NotImplementedError(
@@ -89,7 +101,7 @@ def create_dataloader(
             # )
         loader = nodes.Loader(node, dl_cfg.restart_on_stop_iteration)
         all_loaders.append(loader)
-    return all_loaders[0] if config.stage != "infer" else all_loaders
+    return all_loaders[0] if stage != "infer" else all_loaders
 
 
 def create_dataloaders(config: Config) -> Dict[str, nodes.Loader[DictBatch]]:
