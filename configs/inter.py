@@ -23,7 +23,7 @@ from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 from mcap_data_loader.utils.basic import remove_util
 from mcap_data_loader.callers.dict_map import DictMap, DictMapConfig
 from pydantic import BaseModel
-from config import Config
+from config import Config, ConfigDict
 from collections import ChainMap
 from data.mcap_data_utils import BatchStacker, BatchStackerConfig, DictBatch
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
@@ -37,6 +37,8 @@ import torch
 
 class ExtractorConfig(BaseModel):
     """Configuration for the feature extractor."""
+
+    model_config = ConfigDict(extra="forbid")
 
     model_path: Path
     """Path to the pre-trained BLIP2 model."""
@@ -58,6 +60,8 @@ class ExtractorConfig(BaseModel):
 
 class InteractorConfig(BaseModel):
     """Configuration for the interactor between the model and the environment."""
+
+    model_config = ConfigDict(extra="forbid")
 
     extractor: ExtractorConfig
     """Configuration for the feature extractor."""
@@ -225,7 +229,7 @@ class Interactor(InteractorBasis):
     def get_model_input(
         self, last_prediction: Optional[torch.Tensor], batch: DictBatch
     ) -> DictBatch:
-        print(f"{batch['cur_state']=}, {batch['next_state']=}")
+        # print(f"{batch['cur_state']=}, {batch['next_state']=}")
         data = (
             batch
             if self.config.model_input_from == "data_loader"

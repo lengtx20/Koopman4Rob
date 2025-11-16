@@ -7,6 +7,7 @@ import json
 import yaml
 import time
 import shutil
+import traceback
 from tqdm import tqdm
 from utils.iter_manager import IterationManager
 from utils.fifo_save import FIFOSave
@@ -366,6 +367,7 @@ class KoopmanRunner:
                                 break
                             batch_data = next(ep_iter) if use_data_loader else {}
                             # self.get_logger().info("Predicting...")
+                            # start = time.perf_counter()
                             generator = interactor.interact((prediction, batch_data))
                             try:
                                 # get the model input
@@ -384,6 +386,11 @@ class KoopmanRunner:
                                                 raise ValueError(
                                                     f"Unknown YieldKey: {key}"
                                                 )
+                                    # self.get_logger().info(
+                                    #     "Prediction step took "
+                                    #     f"{(time.perf_counter() - start):.4f} seconds"
+                                    # )
+                                    # start = time.perf_counter()
                                     rate.sleep()
                             except StopIteration as e:
                                 value = e.value
@@ -415,7 +422,17 @@ class KoopmanRunner:
                             logger.info("Press Enter to continue...")
                             input()
                     except StopIteration as e:
-                        logger.info(f"Rollout stopped since: {e}")
+                        e_str = str(e)
+                        if (e_str, e.__context__, e.__cause__) == ("", None, None):
+                            logger.info(
+                                f"Rollout {rollout} ended since dataset reached end."
+                            )
+                        elif e_str:
+                            logger.info(f"Rollout stopped since: {e}")
+                        else:
+                            logger.info(
+                                f"Rollout stopped due to an exception:\n{traceback.format_exc()}"
+                            )
                     if losses:
                         loss_stats = process_mse_losses(losses)
                         loss_stats["rollout"] = rollout
