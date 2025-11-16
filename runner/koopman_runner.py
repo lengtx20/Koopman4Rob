@@ -330,6 +330,7 @@ class KoopmanRunner:
         infer_cfg = config.infer
         interactor = config.interactor
         freq = infer_cfg.frequency
+        max_steps = infer_cfg.max_steps
         prediction = None
         rate = create_sleeper(freq)
         all_losses = []
@@ -361,10 +362,7 @@ class KoopmanRunner:
                             break
                     rate.reset()
                     try:
-                        for step in count():
-                            max_steps = infer_cfg.max_steps
-                            if max_steps > 0 and step > max_steps:
-                                break
+                        for step in count() if max_steps <= 0 else range(max_steps):
                             batch_data = next(ep_iter) if use_data_loader else {}
                             # self.get_logger().info("Predicting...")
                             # start = time.perf_counter()

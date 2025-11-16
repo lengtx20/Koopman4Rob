@@ -79,6 +79,20 @@ class DataLoaderConfig(BaseModel, frozen=True):
     normalize: bool = False
     """Whether to normalize the data."""
 
+    def model_post_init(self, context):
+        if self.horizon is not None and self.pairwise is not None:
+            raise ValueError("Cannot use both horizon and pairwise configurations.")
+
+    @property
+    def future_span(self) -> NonNegativeInt:
+        """Get the future span from the horizon configuration."""
+        if self.horizon is not None:
+            return self.horizon.future_span
+        elif self.pairwise is not None:
+            return self.pairwise.gap + 1
+        else:
+            return 0
+
 
 class CommonConfig(BaseModel):
     """Common configuration parameters.

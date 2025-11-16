@@ -27,10 +27,10 @@ from config import Config, ConfigDict
 from collections import ChainMap
 from data.mcap_data_utils import BatchStacker, BatchStackerConfig, DictBatch
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
-from interactor import InteractorBasis, YieldKey
+from interactor import InteractorBasis, YieldKey, SendValue
 from pathlib import Path
 from pprint import pformat
-from typing import Literal, List, Optional
+from typing import Literal, List
 from more_itertools import collapse
 import torch
 
@@ -87,7 +87,6 @@ class Interactor(InteractorBasis):
 
     def add_config(self, config: Config):
         stack_dl = config.data_loader.stack
-
         stack_env = {}
         for cat_key, keys in stack_dl.items():
             if "next" in cat_key:
@@ -173,10 +172,16 @@ class Interactor(InteractorBasis):
         #     raise RuntimeError("Failed to configure the interactor environment.")
         live_data.reset()
         self.live_data = live_data
+        action_mode = (
+            SystemMode.SAMPLING
+            if self._shared_config.data_loader.future_span <= 1
+            else SystemMode.RESETTING
+        )
+        self.get_logger().info(f"Action mode set to {action_mode}.")
         self._action = GroupsSendActionConfig(
             groups=["/"],
             action_values=[[]],
-            modes=[SystemMode.SAMPLING],
+            modes=[action_mode],
         )
 
     def add_first_batch(self, batch: DictBatch):
@@ -216,7 +221,7 @@ class Interactor(InteractorBasis):
 
     def interact(self, value):
         # first request for the model prediction
-        prediction, batch = yield ((YieldKey.PREDICT, self.get_model_input(*value)),)
+        prediction, batch = yield ((YieldKey.PREDICT, self._get_model_input(value)),)
         # then send actions based on the prediction and batches
         if self.config.action_from == "data_loader":
             yield from self._set_batch(batch)
@@ -226,10 +231,9 @@ class Interactor(InteractorBasis):
     def get_env_data(self) -> DictBatch:
         return self._dic_map(self.live_data.read())
 
-    def get_model_input(
-        self, last_prediction: Optional[torch.Tensor], batch: DictBatch
-    ) -> DictBatch:
+    def _get_model_input(self, value: SendValue) -> DictBatch:
         # print(f"{batch['cur_state']=}, {batch['next_state']=}")
+        last_prediction, batch = value
         data = (
             batch
             if self.config.model_input_from == "data_loader"

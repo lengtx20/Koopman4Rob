@@ -46,12 +46,13 @@ def create_dataloader(
         tupler_cfg = dl_cfg.horizon
         tupler_cls = Horizon
         dict_tuple_depth = 2
-        step = dl_cfg.horizon.future_span
     elif dl_cfg.pairwise is not None:
         tupler_cfg = dl_cfg.pairwise
         tupler_cls = PairWise
         dict_tuple_depth = 1
-        step = dl_cfg.pairwise.gap + 1
+    else:
+        raise NotImplementedError("No tupler configuration provided.")
+    step = dl_cfg.future_span
     source_nodes = {}
     weights = {}
     for index, zipped_episodes in enumerate(nested):
