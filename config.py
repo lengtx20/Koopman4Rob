@@ -299,7 +299,7 @@ class Config(CommonConfig):
         validate_assignment=True, extra="forbid", arbitrary_types_allowed=True
     )
 
-    datasets: IterableMultiEpisodeDatasetsProtocol
+    datasets: Optional[IterableMultiEpisodeDatasetsProtocol] = Field(default=None)
     """Datasets for training/testing/inference."""
     data_loader: DataLoaderConfig
     """Configuration for the data loader."""

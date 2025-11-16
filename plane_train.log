@@ -1,0 +1,15 @@
+[INFO] Loaded data → Tensor: torch.Size([1001000, 108])
+[INFO] Train steps: 800799, Val steps: 200200
+[INFO] Using manual dims: state_dim=48, action_dim=12
+[2025-11-16 23:23:36,075][main][INFO] - stage='train', model_dir=PosixPath('logs/checkpoints/0')
+[INFO] TensorBoard logs will be saved to logs/tensorboard/20251116-232336
+[Runner] Training started: 3580126.238589074...
+
+====================================
+CPU Time used: 00:00:09
+CPU Percent: 10%
+Memory usage: 1435504kb
+Approx Power usage: 0.0
+Walltime usage: 00:01:57
+
+====================================

@@ -1,0 +1,23 @@
+[Training]:   0%|          | 0/5000 [00:00<?, ?it/s][Training]:   0%|          | 0/5000 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/rds/general/user/jw3425/home/RSR/Koopman4Rob/main_demo.py", line 90, in <module>
+    main()
+  File "/rds/general/user/jw3425/home/RSR/Koopman4Rob/main_demo.py", line 86, in main
+    run(Config(**config))
+  File "/rds/general/user/jw3425/home/RSR/Koopman4Rob/main_demo.py", line 68, in run
+    runner.run(stage)
+  File "/rds/general/user/jw3425/home/RSR/Koopman4Rob/runner/koopman_runner.py", line 428, in run
+    return getattr(self, stage)()
+  File "/rds/general/user/jw3425/home/RSR/Koopman4Rob/runner/koopman_runner.py", line 222, in train
+    train_loss = self.iter_loader("train", manager)
+  File "/rds/general/user/jw3425/home/RSR/Koopman4Rob/runner/koopman_runner.py", line 141, in iter_loader
+    for batch in loader:
+  File "/rds/general/user/jw3425/home/miniconda3/envs/koopman4rob/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 734, in __next__
+    data = self._next_data()
+  File "/rds/general/user/jw3425/home/miniconda3/envs/koopman4rob/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 790, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/rds/general/user/jw3425/home/miniconda3/envs/koopman4rob/lib/python3.10/site-packages/torch/utils/data/_utils/fetch.py", line 55, in fetch
+    return self.collate_fn(data)
+  File "/rds/general/user/jw3425/home/RSR/Koopman4Rob/runner/koopman_runner.py", line 93, in <lambda>
+    collate_fn=lambda x: collate_fn(x, device),
+NameError: name 'device' is not defined

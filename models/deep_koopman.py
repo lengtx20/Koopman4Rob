@@ -9,13 +9,13 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt, ConfigDict
 from pydantic_yaml import to_yaml_file, parse_yaml_file_as
 from data.mcap_data_utils import DictBatch
 
-
+# ======= Encoder: lift state to high dimension space ========
 class Encoder(nn.Module):
     def __init__(
         self,
         state_dim,
         action_dim,
-        hidden_sizes,
+        hidden_sizes, # hidden_sizes is List
         lifted_dim,
         activation,
         include_iden_state=True,
@@ -31,14 +31,14 @@ class Encoder(nn.Module):
         # lifted dim is the final output dimension of the encoder
         self.output_size = lifted_dim - state_dim if include_iden_state else lifted_dim
 
-        layers = []
+        layers = [] 
         self.sizes = [self.state_dim] + self.hidden_sizes + [self.output_size]
         # last linear layer index
         last_i = len(self.sizes) - 2
         not_linear = activation != "linear"
         for i, (in_dim, out_dim) in enumerate(zip(self.sizes[:-1], self.sizes[1:])):
             layers.append(nn.Linear(in_dim, out_dim, bias=(not_linear or i == last_i)))
-            if not_linear and i != last_i:
+            if not_linear and i != last_i: # if activation = linear -> no activation layer
                 layers.append(activation_resolver.make(activation))
         self.layers = nn.Sequential(*layers)
 
@@ -141,17 +141,58 @@ class DeepKoopman(nn.Module):
         super().__init__()
         self.config = config
         self._config_name = "config.yaml"
+        
+        self.encoder = Encoder(
+        config.state_dim or 1,  
+        config.action_dim or 1,
+        config.hidden_sizes,
+        config.lifted_dim,
+        config.activation,
+        config.include_iden_state,
+        )
+        
+        self.decoder = Decoder(
+        config.state_dim or 1,
+        config.action_dim or 1,
+        config.hidden_sizes,
+        config.lifted_dim,
+        config.activation,
+        config.include_iden_state,
+        config.iden_decoder,
+        )
 
     def add_first_batch(self, batch: DictBatch) -> None:
-        # get the state and action dims
-        state_dim = batch["cur_state"].shape[-1]
-        action_dim = batch["cur_action"].shape[-1]
-        print(f"[INFO] State dim: {state_dim}, Action dim: {action_dim}")
-        config = self.config
-        if config.state_dim == 0:
-            config.state_dim = state_dim
-        if config.action_dim == 0:
-            config.action_dim = action_dim
+        if batch:
+            state_dim = batch["cur_state"].shape[-1]
+            action_dim = batch["cur_action"].shape[-1]
+            print(f"[INFO] Inferred state_dim={state_dim}, action_dim={action_dim}")
+        else:
+            state_dim = 48
+            action_dim = 12
+            print(f"[INFO] Using manual dims: state_dim={state_dim}, action_dim={action_dim}")
+
+        if self.config.state_dim == 0:
+            self.config.state_dim = state_dim
+        if self.config.action_dim == 0:
+            self.config.action_dim = action_dim
+
+        self.encoder = Encoder(
+            self.config.state_dim,
+            self.config.action_dim,
+            self.config.hidden_sizes,
+            self.config.lifted_dim,
+            self.config.activation,
+            self.config.include_iden_state,
+        )
+        self.decoder = Decoder(
+            self.config.state_dim,
+            self.config.action_dim,
+            self.config.hidden_sizes,
+            self.config.lifted_dim,
+            self.config.activation,
+            self.config.include_iden_state,
+            self.config.iden_decoder,
+        )
 
     def _init_matrix(self, a=None, b=None):
         lifted_dim = self.config.lifted_dim
@@ -373,3 +414,4 @@ class DeepKoopman(nn.Module):
             param_6_b.register_hook(lambda grad: grad * mask_6_b)
         else:
             print("[Warning] No valid Fisher info for encoder.layers.6.bias")
+

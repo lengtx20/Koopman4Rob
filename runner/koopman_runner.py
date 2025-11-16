@@ -73,26 +73,45 @@ class KoopmanRunner:
                 interactor.add_config(self.config)
                 interactor.add_first_batch(first_batch)
         elif config.stage != "infer":
+            # train_data, val_data is [[episode1], ...]
+            train_episodes = train_data[0]  
+            val_episodes = val_data[0] if val_data else []
+
+            def collate_fn(batch,device):
+                return {
+                    "cur_state":  torch.stack([x["cur_state"]  for x in batch]).to(device),
+                    "cur_action":     torch.stack([x["cur_action"]     for x in batch]).to(device),
+                    "next_state": torch.stack([x["next_state"] for x in batch]).to(device),
+                    "batch_size": len(batch),  
+                }
+
             train_loader = DataLoader(
-                KoopmanDataset(train_data),
+                train_episodes,
                 batch_size=batch_size,
-                shuffle=(True and config.stage == "train"),
+                shuffle=True,
                 num_workers=num_workers,
+                collate_fn=lambda x: collate_fn(x,config.device),
             )
-            val_loader = (
-                DataLoader(
-                    KoopmanDataset(val_data),
-                    batch_size=batch_size,
-                    shuffle=False,
-                    num_workers=num_workers,
-                )
-                if val_data is not None
-                else None
-            )
+            val_loader = DataLoader(
+                val_episodes,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=num_workers,
+                collate_fn=lambda x: collate_fn(x, config.device),
+            ) if val_episodes else None
+
             self._data_loaders = {"train": train_loader, "val": val_loader}
 
+
         with torch.device(self.device):
-            self.config.model.add_first_batch(first_batch)
+            if first_batch:
+                self.config.model.add_first_batch(first_batch)
+            else:
+                # manually set dim
+                self.config.model.state_dim = 48
+                self.config.model.action_dim = 12
+
+                self.config.model.add_first_batch({})
             ckpt_dir = None if self.mode == "train" else config.checkpoint_path
             model = self.config.model.load(ckpt_dir)
             if self.mode == "train":
@@ -407,3 +426,4 @@ class KoopmanRunner:
 
     def run(self, stage: str):
         return getattr(self, stage)()
+
