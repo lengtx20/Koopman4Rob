@@ -8,18 +8,17 @@ from airbot_data_collection.common.systems.grouped import (
     SystemSensorComponentGroupsConfig,
     AutoControlConfig,
 )
-
-# from airbot_data_collection.common.devices.cameras.v4l2 import (
-#     V4L2Camera as Camera,
-#     V4L2CameraConfig as CameraConfig,
-# )
-from airbot_data_collection.common.devices.cameras.mock import (
-    MockCamera as Camera,
-    MockCameraConfig as CameraConfig,
+from airbot_data_collection.common.devices.cameras.v4l2 import (
+    V4L2Camera as Camera,
+    V4L2CameraConfig as CameraConfig,
 )
-# from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfigI
+from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
 
-from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+# from airbot_data_collection.common.devices.cameras.mock import (
+#     MockCamera as Camera,
+#     MockCameraConfig as CameraConfig,
+# )
+# from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 from mcap_data_loader.utils.basic import remove_util
 from mcap_data_loader.callers.dict_map import DictMap, DictMapConfig
 from pydantic import BaseModel
@@ -33,6 +32,7 @@ from pprint import pformat
 from typing import Literal, List
 from more_itertools import collapse
 import torch
+# import cv2
 
 
 class ExtractorConfig(BaseModel):
@@ -162,7 +162,7 @@ class Interactor(InteractorBasis):
                     roles=["l", "o"],
                     instances=[
                         AIRBOTPlay(AIRBOTPlayConfig()),
-                        Camera(CameraConfig(camera_index=None)),
+                        Camera(CameraConfig(camera_index="usb-0000:00:14.0-11")),
                     ],
                 ),
                 auto_control=AutoControlConfig(groups=[]),
@@ -244,9 +244,12 @@ class Interactor(InteractorBasis):
         if self.use_extractor:
             features = {}
             for from_key, to_key in zip(self.from_keys, self.to_keys):
+                raw_image = data[from_key][0]
+                # cv2.imwrite("raw_image.png", raw_image)
+                # assert not isinstance(raw_image, torch.Tensor)
                 features[to_key] = {
                     "data": self.extractor.process_image(
-                        data[from_key][0], self.config.extractor.prompt
+                        raw_image[:, :, ::-1].copy(), self.config.extractor.prompt
                     )["features_proj"].squeeze(0)
                 }
             # print(f"{features.keys()=}")
