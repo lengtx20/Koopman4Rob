@@ -24,7 +24,7 @@ from mcap_data_loader.utils.array_like import get_tensor_device_auto
 from mcap_data_loader.utils.basic import create_sleeper, ForceSetAttr
 from mcap_data_loader.basis.cfgable import dump_or_repr
 from mcap_data_loader.utils.terminal import Bcolors
-from more_itertools import consume
+from more_itertools import take
 from logging import getLogger
 from interactor import ReturnAction, YieldKey
 
@@ -386,7 +386,7 @@ class KoopmanRunner:
                             # start = time.perf_counter()
                             generator = interactor.interact((prediction, batch_data))
                             try:
-                                # get the model input
+                                # get the model input and make prediction
                                 _, value = next(generator)[0]
                                 prediction = self.model(value)
                                 self._update_loss(prediction, batch_data, losses)
@@ -396,9 +396,9 @@ class KoopmanRunner:
                                     if yielded is not None:
                                         for key, value in yielded:
                                             if key is YieldKey.NEXT_BATCH:
-                                                batch_data = consume(
-                                                    ep_iter, value or 1
-                                                )
+                                                batch_data = take(value or 1, ep_iter)[
+                                                    -1
+                                                ]
                                             elif key is YieldKey.PREDICT:
                                                 prediction = self.model(value)
                                                 self._update_loss(
