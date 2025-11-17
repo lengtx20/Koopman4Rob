@@ -23,6 +23,7 @@ from mcap_data_loader.utils.extra_itertools import first_recursive
 from mcap_data_loader.utils.array_like import get_tensor_device_auto
 from mcap_data_loader.utils.basic import create_sleeper, ForceSetAttr
 from mcap_data_loader.basis.cfgable import dump_or_repr
+from mcap_data_loader.utils.terminal import Bcolors
 from logging import getLogger
 from interactor import ReturnAction, YieldKey
 
@@ -141,7 +142,9 @@ class KoopmanRunner:
                     model_path = ckpt_dir / f"{loss_key}/{avg_loss:.5f}"
                     saved_fifo.append(model_path)
                     self.model.save(model_path)
-                    self.get_logger().info(f"Model saved to {model_path}")
+                    self.get_logger().info(
+                        Bcolors.green(f"Model saved to {model_path}")
+                    )
             return avg_loss
         # self.get_logger().info(f"Iteration {stage} took {time.monotonic() - start_time:.2f} seconds")
         return avg_loss, batch_losses
@@ -174,7 +177,7 @@ class KoopmanRunner:
         start_timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         snapshots = defaultdict(list)
         snap_count = Counter()
-        logger.info(f"Training started: {start_time}...")
+        logger.info(Bcolors.cyan(f"Training started: {start_time}..."))
         manager.start()
         train_losses = []
         val_losses = []
@@ -225,7 +228,7 @@ class KoopmanRunner:
         except KeyboardInterrupt:
             manager.reasons.add("KeyboardInterrupt")
             epoch -= 1
-        logger.info(f"Stop reasons: {manager.reasons}")
+        logger.info(Bcolors.blue(f"Stop reasons: {manager.reasons}"))
 
         total_time = (time.monotonic() - start_time) / 60.0  # in minutes
         total_time_per_epoch = total_time / (epoch + 1)
@@ -257,11 +260,11 @@ class KoopmanRunner:
             last_model_path = ckpt_dir / "last"
             last_model_path.mkdir(parents=True, exist_ok=True)
             self.model.save(path=last_model_path)
-            logger.info(f"Last model saved to {last_model_path}")
+            logger.info(Bcolors.green(f"Last model saved to {last_model_path}"))
             fifo_saver = self.improve_dict.get("val_loss", None)
             if fifo_saver.last_item is not None:
                 shutil.copytree(fifo_saver.last_item, ckpt_dir / "best")
-                logger.info(f"Best model copied to {ckpt_dir / 'best'}")
+                logger.info(Bcolors.green(f"Best model copied to {ckpt_dir / 'best'}"))
             with open(ckpt_dir / "train_val_losses.json", "w") as f:
                 json.dump(
                     {"train": train_losses, "val": val_losses},
@@ -324,7 +327,9 @@ class KoopmanRunner:
         if test_cfg.save_results:
             with open(model_dir / f"{self.mode}_metrics.json", "w") as f:
                 json.dump(metrics_dict, f, indent=4)
-            self.get_logger().info(f"[Test-{self.mode}] Results saved to {model_dir}")
+            self.get_logger().info(
+                Bcolors.green(f"[Test-{self.mode}] Results saved to {model_dir}")
+            )
 
     def infer(self):
         data_loader = self._data_loaders.get(self.mode, None)
@@ -341,7 +346,7 @@ class KoopmanRunner:
         rate = create_sleeper(freq)
         all_losses = []
         logger = self.get_logger()
-        logger.info("Starting inference...")
+        logger.info(Bcolors.cyan("Starting inference..."))
         with torch.no_grad():
             try:
                 for rollout in count():
@@ -355,14 +360,20 @@ class KoopmanRunner:
                         else:
                             index = rollout
                         if index == 0 and rollout > 0:
-                            logger.info("Iterating the data loader from the beginning")
+                            logger.info(
+                                Bcolors.blue(
+                                    "Iterating the data loader from the beginning"
+                                )
+                            )
                         cur_loader = data_loader[index]
                         first_batch = next(iter(cur_loader))
                         interactor.add_first_batch(first_batch)
                         ep_iter = iter(cur_loader)
                     if infer_cfg.rollout_wait is not None:
                         logger.info(
-                            f"Press Enter to start {rollout=} or `q` to quit..."
+                            Bcolors.blue(
+                                f"Press Enter to start {rollout=} or `q` to quit..."
+                            )
                         )
                         if input() == "q":
                             break
@@ -399,14 +410,18 @@ class KoopmanRunner:
                             except StopIteration as e:
                                 value = e.value
                                 if value is not None:
-                                    logger.info(f"Interactor updating stopped: {value}")
+                                    logger.info(
+                                        Bcolors.blue(
+                                            f"Interactor updating stopped: {value}"
+                                        )
+                                    )
                                     if value is ReturnAction.NEXT:
                                         break
                                     elif value is ReturnAction.EXIT:
                                         raise RunnerExit("interactor request")
                                     elif value is ReturnAction.WAIT:
                                         self.get_logger().info(
-                                            "Press Enter to continue..."
+                                            Bcolors.blue("Press Enter to continue...")
                                         )
                                         input()
                                     elif isinstance(value, BaseException):
@@ -420,16 +435,20 @@ class KoopmanRunner:
                             logger.info(f"RMSE: {torch.sqrt(loss) * 180 / np.pi} deg")
                     except KeyboardInterrupt:
                         logger.info(
-                            f"Rollout interrupted by user at {step=}, resetting..."
+                            Bcolors.blue(
+                                f"Rollout interrupted by user at {step=}, resetting..."
+                            )
                         )
                         if infer_cfg.rollout_wait is None:
-                            logger.info("Press Enter to continue...")
+                            logger.info(Bcolors.blue("Press Enter to continue..."))
                             input()
                     except StopIteration as e:
                         e_str = str(e)
                         if (e_str, e.__context__, e.__cause__) == ("", None, None):
                             logger.info(
-                                f"Rollout {rollout} ended since dataset reached end."
+                                Bcolors.blue(
+                                    f"Rollout {rollout} ended since dataset reached end."
+                                )
                             )
                         elif e_str:
                             logger.info(f"Rollout stopped since: {e}")
@@ -443,9 +462,9 @@ class KoopmanRunner:
                         pprint(loss_stats)
                         all_losses.append(loss_stats["mse"]["mean"])
             except KeyboardInterrupt:
-                logger.info("Inference ended by user.")
+                logger.info(Bcolors.blue("Inference ended by user."))
             except (StopIteration, IndexError):
-                logger.info("Inference ended since dataset reached end.")
+                logger.info(Bcolors.blue("Inference ended since dataset reached end."))
             except RunnerExit as e:
                 logger.info(f"Inference ended: {e}.")
 
