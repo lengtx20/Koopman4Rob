@@ -21,7 +21,7 @@ from torch import optim
 from typing import Optional, Callable, Any
 from mcap_data_loader.utils.extra_itertools import first_recursive
 from mcap_data_loader.utils.array_like import get_tensor_device_auto
-from mcap_data_loader.utils.basic import create_sleeper
+from mcap_data_loader.utils.basic import create_sleeper, ForceSetAttr
 from mcap_data_loader.basis.cfgable import dump_or_repr
 from logging import getLogger
 from interactor import ReturnAction, YieldKey
@@ -34,7 +34,8 @@ class RunnerExit(Exception):
 class KoopmanRunner:
     def __init__(self, config: Config, train_data, val_data):
         set_seed(config.seed)
-        config.device = get_tensor_device_auto(config.device)
+        with ForceSetAttr(config):
+            config.device = get_tensor_device_auto(config.device)
         self.device = torch.device(config.device)
         self.loss_fn: Callable[[Any, Any], torch.Tensor] = config.loss_fn
         self.mode = config.stage

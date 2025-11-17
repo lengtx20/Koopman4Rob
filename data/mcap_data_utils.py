@@ -52,15 +52,16 @@ def create_dataloader(
         dict_tuple_depth = 1
     else:
         raise NotImplementedError("No tupler configuration provided.")
-    step = dl_cfg.future_span
     source_nodes = {}
     weights = {}
     for index, zipped_episodes in enumerate(nested):
         # merge the zipped episodes
         merged = Merge(MergeConfig(replace=True))(zipped_episodes)
         tupled = tupler_cls(tupler_cfg)(merged)
-        if config.stage == "infer":
-            final_pipe = Slice(SliceConfig(step=step))(tupled)
+        if config.stage == "infer" and dl_cfg.slicing is None:
+            final_pipe = Slice(SliceConfig(step=dl_cfg.future_span))(tupled)
+        elif dl_cfg.slicing is not None:
+            final_pipe = Slice(dl_cfg.slicing)(tupled)
         else:
             final_pipe = tupled
         dict_tupled = Map(

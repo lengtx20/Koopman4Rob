@@ -10,12 +10,13 @@ from typing import List, Optional, Literal, Any, Set, Dict, Union, Tuple
 from collections.abc import Callable
 from functools import cache
 from pathlib import Path
-from mcap_data_loader.pipelines import HorizonConfig, PairWiseConfig
 from interactor import InteractorBasis
 from basis import ModelLike
+from mcap_data_loader.pipelines import HorizonConfig, PairWiseConfig, SliceConfig
 from mcap_data_loader.callers.stack import StackType
 from mcap_data_loader.callers.dict_tuple import DictTupleConfig
 from mcap_data_loader.datasets.dataset import IterableMultiEpisodeDatasetsProtocol
+from mcap_data_loader.utils.basic import force_set_attr
 
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
@@ -66,6 +67,8 @@ class DataLoaderConfig(BaseModel, frozen=True):
     """Configuration for horizon processing."""
     pairwise: Optional[PairWiseConfig] = None
     """Configuration for pairwise processing."""
+    slicing: Optional[SliceConfig] = None
+    """Configuration for slicing processing."""
     dict_tuple: DictTupleConfig = DictTupleConfig()
     """Configuration for dict tuple processing."""
     parallel: ParallelConfig = ParallelConfig()
@@ -94,7 +97,7 @@ class DataLoaderConfig(BaseModel, frozen=True):
             return 0
 
 
-class CommonConfig(BaseModel):
+class CommonConfig(BaseModel, frozen=True):
     """Common configuration parameters.
     These configurations are applicable to both training and testing
     """
@@ -119,6 +122,7 @@ class CommonConfig(BaseModel):
     ewc_model: Optional[Path] = None
     ewc_lambda: float = 100.0
 
+    @force_set_attr
     def model_post_init(self, context):
         def process_path(
             path: Optional[Path], relative_to: Path = self.root_dir
