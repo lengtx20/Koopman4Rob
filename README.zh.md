@@ -90,9 +90,14 @@ python3 main.py stage=test +checkpoint_path=0/best
 python3 main.py +infer=basis +checkpoint_path=0/best
 ```
 
-- 执行动作
+- 执行来自数据集的动作（类似数据重放）
 ```bash
 python3 main.py +infer=basis interactor.action_from=data_loader +checkpoint_path=0/best infer.frequency=0 infer.rollout_wait=input
+```
+
+- 执行来自模型预测的动作
+```bash
+python3 main.py +infer=basis interactor.action_from=model +checkpoint_path=0/best infer.frequency=0 infer.rollout_wait=input
 ```
 
 ### 平台推理

@@ -217,7 +217,7 @@ class Interactor(InteractorBasis):
         return func(pred[0].tolist())
 
     def _set_batch(self, batch: DictBatch):
-        return self._send_actions(batch["cur_state"][0].tolist())
+        return self._send_actions(batch["next_state"][0].tolist())
 
     def interact(self, value):
         # first request for the model prediction

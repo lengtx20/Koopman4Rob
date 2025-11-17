@@ -24,6 +24,7 @@ from mcap_data_loader.utils.array_like import get_tensor_device_auto
 from mcap_data_loader.utils.basic import create_sleeper, ForceSetAttr
 from mcap_data_loader.basis.cfgable import dump_or_repr
 from mcap_data_loader.utils.terminal import Bcolors
+from more_itertools import consume
 from logging import getLogger
 from interactor import ReturnAction, YieldKey
 
@@ -388,15 +389,21 @@ class KoopmanRunner:
                                 # get the model input
                                 _, value = next(generator)[0]
                                 prediction = self.model(value)
+                                self._update_loss(prediction, batch_data, losses)
                                 while True:
                                     # send back the prediction and get the next command
                                     yielded = generator.send((prediction, batch_data))
                                     if yielded is not None:
                                         for key, value in yielded:
                                             if key is YieldKey.NEXT_BATCH:
-                                                batch_data = next(ep_iter)
+                                                batch_data = consume(
+                                                    ep_iter, value or 1
+                                                )
                                             elif key is YieldKey.PREDICT:
                                                 prediction = self.model(value)
+                                                self._update_loss(
+                                                    prediction, batch_data, losses
+                                                )
                                             else:
                                                 raise ValueError(
                                                     f"Unknown YieldKey: {key}"
@@ -430,9 +437,6 @@ class KoopmanRunner:
                                         raise value("Interactor requested exception")
                                     else:
                                         pass
-                            loss = self.loss_fn(prediction, batch_data)
-                            losses.append(loss.item())
-                            logger.info(f"RMSE: {torch.sqrt(loss) * 180 / np.pi} deg")
                     except KeyboardInterrupt:
                         logger.info(
                             Bcolors.blue(
@@ -473,6 +477,11 @@ class KoopmanRunner:
             loss_stats["rollout"] = "overall"
             logger.info(f"Overall loss stats: {loss_stats}")
         return interactor.shutdown()
+
+    def _update_loss(self, prediction, batch_data, losses: list):
+        loss = self.loss_fn(prediction, batch_data)
+        losses.append(loss.item())
+        self.get_logger().info(f"RMSE: {torch.sqrt(loss) * 180 / np.pi} deg")
 
     def run(self, stage: str):
         return getattr(self, stage)()
