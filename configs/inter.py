@@ -8,17 +8,17 @@ from airbot_data_collection.common.systems.grouped import (
     SystemSensorComponentGroupsConfig,
     AutoControlConfig,
 )
-from airbot_data_collection.common.devices.cameras.v4l2 import (
-    V4L2Camera as Camera,
-    V4L2CameraConfig as CameraConfig,
-)
-from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-
-# from airbot_data_collection.common.devices.cameras.mock import (
-#     MockCamera as Camera,
-#     MockCameraConfig as CameraConfig,
+# from airbot_data_collection.common.devices.cameras.v4l2 import (
+#     V4L2Camera as Camera,
+#     V4L2CameraConfig as CameraConfig,
 # )
-# from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
+# from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
+
+from airbot_data_collection.common.devices.cameras.mock import (
+    MockCamera as Camera,
+    MockCameraConfig as CameraConfig,
+)
+from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 from mcap_data_loader.utils.basic import remove_util
 from mcap_data_loader.callers.dict_map import DictMap, DictMapConfig
 from pydantic import BaseModel

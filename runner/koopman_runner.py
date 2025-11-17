@@ -14,7 +14,7 @@ from utils.fifo_save import FIFOSave
 from utils.utils import process_mse_losses, set_seed, get_model_size
 from torch.utils.tensorboard import SummaryWriter
 from config import Config
-from pprint import pprint
+from pprint import pformat
 from collections import defaultdict, Counter
 from itertools import count
 from torch import optim
@@ -322,7 +322,7 @@ class KoopmanRunner:
             "max_rloss_deg": np.sqrt(max(batch_losses)) / np.pi * 180,
             "num_batches": len(batch_losses),
         }
-        pprint(metrics_dict)
+        self.get_logger().info(f"Test metrics: \n{pformat(metrics_dict)}")
 
         # ----- save the results -----
         if test_cfg.save_results:
@@ -463,7 +463,9 @@ class KoopmanRunner:
                     if losses:
                         loss_stats = process_mse_losses(losses)
                         loss_stats["rollout"] = rollout
-                        pprint(loss_stats)
+                        logger.info(
+                            f"Rollout {rollout} loss stats: \n{pformat(loss_stats)}"
+                        )
                         all_losses.append(loss_stats["mse"]["mean"])
             except KeyboardInterrupt:
                 logger.info(Bcolors.blue("Inference ended by user."))
@@ -475,7 +477,7 @@ class KoopmanRunner:
         if all_losses:
             loss_stats = process_mse_losses(all_losses)
             loss_stats["rollout"] = "overall"
-            logger.info(f"Overall loss stats: {loss_stats}")
+            logger.info(f"Overall loss stats: \n{pformat(loss_stats)}")
         return interactor.shutdown()
 
     def _update_loss(self, prediction, batch_data, losses: list):

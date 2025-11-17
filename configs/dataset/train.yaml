@@ -7,7 +7,7 @@ datasets:
     rearrange:
       dataset: sort_stem_digital
   roots:
-    mcap_data/reach3tags:
+    mcap_data/reach_center:
       - ${extra.arm_state}
-    mcap_data/reach3tags_blip2_features:
+    mcap_data/reach_center_blip2_features:
       - ${extra.env_color_feat}
