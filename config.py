@@ -287,10 +287,10 @@ class TrainConfig(BaseModel, frozen=True):
     """List of snapshot configurations."""
     save_model: SaveModelConfig = SaveModelConfig()
     """Configuration for saving the model."""
-    train_val_split: Union[float, Tuple[int, int]] = 0.8
+    train_val_split: Union[float, Tuple[int, Union[int, float]]] = 0.8
     """Train/validation datasets split configuration.
     If float, represents the proportion of data to use for training.
-    If tuple, represents the (train_step, val_step). This means that `train_step` data points are taken from the `episode` list, followed by `val_step` data points, and so on. The final ratio of the training set to the validation set is approximately `train_step:val_step`. This method is suitable for repeatedly collecting data N times under the same settings, then changing to the next setting and continuing to collect data. After traversing M settings, there are a total of N * M episodes. During training, this partitioning method ensures that the validation set covers all different settings.
+    If tuple, when the second element is an integer, represents the `(train_step, val_step)`. This means that `train_step` data points are taken from the `episode` list, followed by `val_step` data points, and so on. The final ratio of the training set to the validation set is approximately `train_step:val_step`; when the second element is a float (< 1), it represents `(group_size, train_ratio)`. This means that the datasets is divided into multiple groups according to `group_size`. The `train_ratio` of each group is used as the training set, and the rest is used as the validation set. This method is suitable for repeatedly collecting data N times under the same settings, then changing to the next setting and continuing to collect data. After traversing M settings, there are a total of N * M episodes. During training, this partitioning method ensures that the validation set covers all different settings.
     """
 
 

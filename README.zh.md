@@ -33,7 +33,7 @@ datasets = [dataset1, dataset2]
 ### 训练配置
 
 默认配置位于`config.yaml`中的`train`字段，详细说明可参考`config.py`中`TrainConfig`类的注释。
-
+可主要关注`train_val_split`字段正确划分训练集和验证集。
 
 ### 推理配置
 

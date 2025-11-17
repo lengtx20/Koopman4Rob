@@ -110,16 +110,25 @@ def create_dataloaders(config: Config) -> Dict[str, nodes.Loader[DictBatch]]:
     print("Creating data loaders...")
     if config.stage == "train":
         splited_datasets = {"train": [], "val": []}
+        split = config.train.train_val_split
         for dataset in config.datasets:
             sample_datasets = list(dataset)
             num = len(sample_datasets)
-            split = config.train.train_val_split
-            if isinstance(split, float):
+            if isinstance(split, (float, int)):
                 train_num = int(num * split)
                 train = sample_datasets[:train_num]
                 val = sample_datasets[train_num:]
             else:
-                train, val = take_skip(sample_datasets, split[0], split[1])
+                if split[1] < 1:
+                    train_step = int(split[0] * split[1])
+                    val_step = split[0] - train_step
+                else:
+                    train_step, val_step = split
+                if train_step < val_step:
+                    raise ValueError(
+                        "train_step should be greater than or equal to val_step."
+                    )
+                train, val = take_skip(sample_datasets, train_step, val_step)
                 RearrangeType.rearrange(train, RearrangeType.SORT_STEM_DIGITAL)
                 RearrangeType.rearrange(val, RearrangeType.SORT_STEM_DIGITAL)
             splited_datasets["train"].append(train)

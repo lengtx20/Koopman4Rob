@@ -181,6 +181,8 @@ if __name__ == "__main__":
         McapFlatBuffersEpisodeDataset,
         McapFlatBuffersEpisodeDatasetConfig,
         McapFlatBuffersSampleDataset,
+        DataRearrangeConfig,
+        RearrangeType,
     )
 
     # TODO: maybe there can be a reversed dataset that writes to MCAP?
@@ -228,6 +230,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num-workers", "-nw", type=int, default=4, help="Number of workers"
     )
+    parser.add_argument(
+        "--start-index",
+        "-si",
+        type=int,
+        default=0,
+        help="Start index for processing episodes",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -244,6 +253,7 @@ if __name__ == "__main__":
             keys=keys,
             strict=False,
             media_configs=[DecodeConfig(mismatch_tolerance=5, frame_format="rgb24")],
+            rearrange=DataRearrangeConfig(episode=RearrangeType.SORT_STEM_DIGITAL),
         )
     )
     output_dir = args.output_directory
@@ -280,7 +290,9 @@ if __name__ == "__main__":
 
     start = monotonic()
     futures = []
-    for index, episode in enumerate(dataset):
+    dataset_list = list(dataset)
+    print(f"{dataset_list=}")
+    for index, episode in enumerate(dataset_list[args.start_index :]):
         futures.append(executor.submit(process_episode, index, episode))
     for index, future in enumerate(as_completed(futures)):
         future.result()
