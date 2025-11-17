@@ -246,7 +246,6 @@ if __name__ == "__main__":
             media_configs=[DecodeConfig(mismatch_tolerance=5, frame_format="rgb24")],
         )
     )
-    dataset.load()
     output_dir = args.output_directory
     if output_dir == "":
         output_dir = input_dir.parent / f"{input_dir.name}_blip2_features"
