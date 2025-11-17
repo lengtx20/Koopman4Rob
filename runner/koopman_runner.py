@@ -18,7 +18,7 @@ from pprint import pprint
 from collections import defaultdict, Counter
 from itertools import count
 from torch import optim
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Union, List, Tuple
 from mcap_data_loader.utils.extra_itertools import first_recursive
 from mcap_data_loader.utils.array_like import get_tensor_device_auto
 from mcap_data_loader.utils.basic import create_sleeper, ForceSetAttr
@@ -47,9 +47,6 @@ class KoopmanRunner:
         self.num_workers = config.data_loader.num_workers
         self.tb_log_dir = config.tb_log_dir
         self.config = config
-
-        self.losses = []
-        self.vales = []
 
         # create data loaders and get the first batch
         first_batch = {}
@@ -81,7 +78,9 @@ class KoopmanRunner:
             # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
             self.model = model
 
-    def iter_loader(self, stage: str, manager: Optional[IterationManager] = None):
+    def iter_loader(
+        self, stage: str, manager: Optional[IterationManager] = None
+    ) -> Optional[Union[float, Tuple[float, List[float]]]]:
         start_time = time.monotonic()
         sample_num = 0
         total_loss = 0
@@ -177,6 +176,8 @@ class KoopmanRunner:
         snap_count = Counter()
         logger.info(f"Training started: {start_time}...")
         manager.start()
+        train_losses = []
+        val_losses = []
         try:
             for epoch in epoch_bar:
                 train_loss = self.iter_loader("train", manager)
@@ -188,8 +189,8 @@ class KoopmanRunner:
                         f"validation also: {train_reasons=}, {val_reasons=}"
                     )
 
-                self.losses.append(train_loss)
-                self.vales.append(val_loss)
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
 
                 # ----- TensorBoard -----
                 self.writer.add_scalar("Loss/Train", train_loss, epoch)
@@ -261,8 +262,12 @@ class KoopmanRunner:
             if fifo_saver.last_item is not None:
                 shutil.copytree(fifo_saver.last_item, ckpt_dir / "best")
                 logger.info(f"Best model copied to {ckpt_dir / 'best'}")
-            np.save(ckpt_dir / "losses.npy", np.array(self.losses))
-            np.save(ckpt_dir / "vales.npy", np.array(self.vales))
+            with open(ckpt_dir / "train_val_losses.json", "w") as f:
+                json.dump(
+                    {"train": train_losses, "val": val_losses},
+                    f,
+                    indent=4,
+                )
             with open(ckpt_dir / "training_metrics.json", "w") as f:
                 json.dump(metrics, f, indent=4)
             with open(ckpt_dir / "training_config.yaml", "w") as f:

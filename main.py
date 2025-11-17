@@ -3,6 +3,7 @@
 from runner.koopman_runner import KoopmanRunner
 from config import Config
 from hydra_zen import instantiate, store
+from mcap_data_loader.utils.basic import ForceSetAttr
 import hydra
 import logging
 
@@ -23,7 +24,8 @@ def run(config: Config):
             next_id = max(ids) + 1 if ids else 0
             model_dir = model_dir.parent / f"{next_id}{model_dir.suffix}"
         model_dir.mkdir(parents=True)
-        config.checkpoint_path = model_dir
+        with ForceSetAttr(config):
+            config.checkpoint_path = model_dir
     runner.run(stage)
 
 
