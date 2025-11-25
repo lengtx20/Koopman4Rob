@@ -10,10 +10,15 @@ pip3 install -r requirements.txt
 
 在 `configs/config.yaml` 中配置各种参数，全部可配置参数请参考 `config.py`中的各种配置类（符合hydra规范）。
 
-### 数据集加载
+### 数据集配置
 
-数据集默认配置位于`configs/dataset/train.yaml` ，可以修改该文件以加载自定义数据集。
-数据集`datasets`是一个可迭代对象，结构为[dataset1， dataset2， ...]，每个dataset是包含多个episode
+数据集默认配置位于`configs/data_source`目录，根据不同的阶段分别进行配置，可以修改相关文件以加载自定义数据集。
+数据集`datasets`必须是一个可迭代对象。数据集作为数据加载器的子配置，二者有较强的耦合关系，通常需要根据数据集的具体结构对数据加载器进行相应的配置调整。
+
+### 数据加载配置
+
+数据加载配置需要与数据集格式对齐，默认数据加载配置位于`configs/data_loaders`目录中，并按不同的阶段分别进行配置。
+该默认配置对应数据集结构为`[dataset1, dataset2, ...]`，每个dataset是包含多个episode
 可迭代对象的列表，即`datasets = [episode1, episode2, ...]`。其中每个episode是一个Iterable[Dict[str, np.ndarray]]类型的对象。其中，多个dataset不是串行关系，而是会被并行加载并将字典数据合并在一起。例如：
 
 ```python
@@ -24,6 +29,7 @@ dataset2 = [dataset2_episode1, ...]
 datasets = [dataset1, dataset2]
 ```
 则在加载后，每个数据字典将包含`'robot/state'`和`'camera/image'`两个key。
+数据相关配置项较为复杂，对于特定配置修改需求可将配置文件夹提供给大模型进行咨询，或者阅读`configs/data_loaders/train_val.yaml`，理解数据处理pipeline的构建逻辑以及各个配置项的作用。
 
 ### 模型配置
 
@@ -33,7 +39,6 @@ datasets = [dataset1, dataset2]
 ### 训练配置
 
 默认配置位于`config.yaml`中的`train`字段，详细说明可参考`config.py`中`TrainConfig`类的注释。
-可主要关注`train_val_split`字段正确划分训练集和验证集。
 
 ### 推理配置
 

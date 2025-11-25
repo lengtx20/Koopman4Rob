@@ -1,0 +1,100 @@
+# @package _global_
+
+defaults:
+  - /data_source: train_val
+  - extra
+
+stage: train
+data_loaders:
+  _target_: mcap_data_loader.basis.data_loader.DataLoaders
+  task_name: reach_center
+  data_root: mcap_data
+  device: auto
+  dtype: float32
+  batch_size: 64
+  nested_zip:
+    depth: 1
+  merge:
+    replace: true
+  pairwise:
+    fill_with_last: true
+  slice:
+    step: null
+  parallel:
+    num_workers: 0
+    snapshot_frequency: 1000
+  stacker:
+    backend_out: torch
+    device: ${data_loaders.device}
+    dtype: ${data_loaders.dtype}
+  split:
+    grouped_ratio: [25, 0.8]
+  registry0:
+    _target_: mcap_data_loader.pipelines.register_named_pipelines
+    # the key must be a string type, or you can put it in `named_pipelines` field
+    ep_merge:
+      0:
+        _target_: mcap_data_loader.pipelines.Merge
+        config: ${data_loaders.merge}
+      1:
+        _target_: mcap_data_loader.pipelines.PairWise
+        config: ${data_loaders.pairwise}
+      2:
+        _target_: mcap_data_loader.pipelines.Slice
+        config: ${data_loaders.slice}
+      3:
+        _target_: mcap_data_loader.callers.Map
+        callable:
+          _target_: mcap_data_loader.callers.DictTuple
+          separate_key: false
+      4:
+        # use curry to make any callable compatible with the pipeline
+        _target_: mcap_data_loader.callers.Curry
+        callable: torchdata.nodes.IterableWrapper
+    to_loader:
+      0:
+        _target_: mcap_data_loader.callers.nodes.MultiNodeWeightedSampler
+      1:
+        _target_: mcap_data_loader.callers.nodes.Batcher
+        batch_size: ${data_loaders.batch_size}
+        drop_last: false
+      2:
+        _target_: mcap_data_loader.callers.nodes.ParallelMapper
+        config: ${data_loaders.parallel}
+        map_fn:
+          _target_: mcap_data_loader.callers.stack.BatchStacker
+          config: ${data_loaders.stacker}
+      3:
+        _target_: mcap_data_loader.callers.nodes.Loader
+        restart_on_stop_iteration: true
+  registry1:
+    _target_: mcap_data_loader.pipelines.register_named_pipelines
+    main:
+      0: # ([d0.ep0, d0.ep1, ...], [d1.ep0, d1.ep1, ...]) -> [(d0.ep0, d1.ep0), (d0.ep1, d1.ep1), ...]
+        _target_: mcap_data_loader.pipelines.NestedZip
+        # standard pipeline and caller support `config` field
+        # so we can use Hydra's variable substitution here and
+        config: ${data_loaders.nested_zip}
+      1: # diverter: apply a sub-pipeline to each value in the splitted dictionary
+        _target_: mcap_data_loader.callers.Map
+        callable:
+          _target_: mcap_data_loader.pipelines.Pipeline
+          pipeline: # merge and process the coupled episodes
+            0: ep_merge
+      2: # splitter: split the data into training and validation sets
+        # {"train": [(d0.ep0, d1.ep0), ..., (d0.ep7, d1.ep7)], "val": [(d0.ep8, d1.ep8), ...] }
+        _target_: mcap_data_loader.callers.splitters.binary.BinarySplitter
+        keys: [train, val]
+        config: ${data_loaders.split}
+      3:
+        _target_: mcap_data_loader.callers.Map
+        callable:
+          _target_: mcap_data_loader.pipelines.Pipeline
+          pipeline:
+            0: to_loader
+        must: {} # default values are as follows, so if the value is not mapping, it will be directly processed
+          # mapping: true
+          # mode: direct
+  sources:
+    main:
+      pipeline: main

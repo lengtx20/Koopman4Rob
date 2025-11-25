@@ -1,9 +1,0 @@
-# @package _global_
-
-defaults:
-  - train
-
-datasets:
-  roots:
-    0//mcap_data/reach3tags:
-      - ${extra.env_color}

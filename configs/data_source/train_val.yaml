@@ -1,0 +1,15 @@
+# @package data_loaders.sources.main.source
+
+_target_: mcap_data_loader.datasets.mcap_dataset.McapMultiEpisodeDatasets
+common:
+  strict: false
+  rearrange:
+    dataset: sort_stem_digital
+configs:
+  raw:
+    data_root: ${data_loaders.data_root}/${data_loaders.task_name}
+    keys: ${extra.cur_state}
+  blip2_feat:
+    data_root: ${data_loaders.data_root}/${data_loaders.task_name}_blip2_features
+    keys:
+      0: ${extra.env_color_feat}

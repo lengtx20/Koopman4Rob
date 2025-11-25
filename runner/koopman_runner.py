@@ -13,15 +13,14 @@ from utils.iter_manager import IterationManager
 from utils.fifo_save import FIFOSave
 from utils.utils import process_mse_losses, set_seed, get_model_size
 from torch.utils.tensorboard import SummaryWriter
-from config import Config
+from config import Config, Stage
 from pprint import pformat
 from collections import defaultdict, Counter
 from itertools import count
 from torch import optim
 from typing import Optional, Callable, Any, Union, List, Tuple
 from mcap_data_loader.utils.extra_itertools import first_recursive
-from mcap_data_loader.utils.array_like import get_tensor_device_auto
-from mcap_data_loader.utils.basic import create_sleeper, ForceSetAttr
+from mcap_data_loader.utils.basic import create_sleeper
 from mcap_data_loader.basis.cfgable import dump_or_repr
 from mcap_data_loader.utils.terminal import Bcolors
 from more_itertools import take
@@ -36,29 +35,26 @@ class RunnerExit(Exception):
 class KoopmanRunner:
     def __init__(self, config: Config, train_data, val_data):
         set_seed(config.seed)
-        with ForceSetAttr(config):
-            config.device = get_tensor_device_auto(config.device)
-        self.device = torch.device(config.device)
         self.loss_fn: Callable[[Any, Any], torch.Tensor] = config.loss_fn
         self.mode = config.stage
         self.ewc_model = config.ewc_model
         self.train_data = train_data
         self.val_data = val_data
-        self.normalize = config.data_loader.normalize
         self.ewc_lambda = config.ewc_lambda
-        self.num_workers = config.data_loader.num_workers
         self.tb_log_dir = config.tb_log_dir
         self.config = config
 
-        # create data loaders and get the first batch
+        # get the first batch
+        self._data_loaders = config.data_loaders
+        key = "main" if "main" in self._data_loaders else config.stage
+        data_loader = self._data_loaders.get(key, None)
         first_batch = {}
-        if config.datasets:
-            from data.mcap_data_utils import create_dataloaders
-
-            self._data_loaders = create_dataloaders(config)
-            first_batch = first_recursive(
-                self._data_loaders.values(), 3 if self.mode == "infer" else 2
-            )
+        self.get_logger().info(f"{self._data_loaders.keys()=}")
+        if data_loader is not None:
+            first_batch = first_recursive(data_loader, 2 if self.mode == "infer" else 1)
+        elif config.stage is not Stage.INFER:
+            raise RuntimeError("No data loader available.")
+        self.get_logger().info(f"First batch keys: {list(first_batch.keys())}")
         # configure the interactor
         interactor = config.interactor
         if interactor is not None:
@@ -67,18 +63,16 @@ class KoopmanRunner:
             for different episodes, such as with different initial conditions, 
             the `add_first_batch` method is not called here."""
         # load and prepare the model
-        with torch.device(self.device):
-            # Assume the model behaves consistently across all episodes.
-            config.model.add_first_batch(first_batch)
-            ckpt_dir = None if self.mode == "train" else config.checkpoint_path
-            model = config.model.load(ckpt_dir)
-            if self.mode == "train":
-                # TODO: configure this, ref. DP project
-                self.optimizer = optim.Adam(model.parameters(), lr=1e-4)
-            else:
-                model.eval()
-            # ewc = EWC(model, data=train_data, loss_fn=loss_fn, device=device)
-            self.model = model
+        # assume the model behaves consistently across all episodes.
+        config.model.add_first_batch(first_batch)
+        ckpt_dir = None if self.mode == "train" else config.checkpoint_path
+        model = config.model.load(ckpt_dir)
+        if self.mode == "train":
+            # TODO: configure this, ref. DP project
+            self.optimizer = optim.Adam(model.parameters(), lr=1e-4)
+        else:
+            model.eval()
+        self.model = model
 
     def iter_loader(
         self, stage: str, manager: Optional[IterationManager] = None
@@ -233,7 +227,8 @@ class KoopmanRunner:
 
         total_time = (time.monotonic() - start_time) / 60.0  # in minutes
         total_time_per_epoch = total_time / (epoch + 1)
-        batch_size = config.data_loader.batch_size
+        # FIXME: use actual batch size
+        batch_size = 1
         metrics = {
             "time_stamp": {
                 "start": start_timestamp,
@@ -285,20 +280,6 @@ class KoopmanRunner:
             logger.info(f"Losses, vales and metrics saved to {ckpt_dir}")
         else:
             logger.info("No Koopman model saved")
-
-        # ----- compute fisher and save fisher info -----
-        logger.info("Computing Fisher Information after training...")
-        if self.ewc_model is not None:
-            train_tensor = torch.tensor(
-                self.train_data, dtype=torch.float32, device=self.device
-            )
-            fisher = self.ewc_model.compute_fisher(train_tensor, batch_size=64)
-            self.ewc_model.fisher = fisher
-            logger.info("Fisher matrix updated.")
-            if save_model and ckpt_dir is not None:
-                self.ewc_model.save(model_dir=ckpt_dir, task_id=train_cfg.task_id)
-        else:
-            logger.info("No EWC model attached or invalid.")
 
     def test(self):
         """Test model on given dataset (train/val)."""
@@ -356,7 +337,7 @@ class KoopmanRunner:
                     if max_rollouts > 0 and rollout > max_rollouts:
                         break
                     if use_data_loader:
-                        if config.data_loader.restart_on_stop_iteration:
+                        if False:
                             index = rollout % num_loaders
                         else:
                             index = rollout

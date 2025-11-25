@@ -1,0 +1,24 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /data_source:
+      - infer
+      - live
+
+data_loaders:
+  batcher:
+    batch_size: 1
+  registry0:
+    to_loader:
+      0: null # disable the MultiNodeWeightedSampler
+  registry1:
+    main:
+      1:
+        callable:
+          pipeline:
+            1: to_loader # apply to each episode
+      3: null
+sources:
+  live:
+    pipeline: null

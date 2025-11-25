@@ -1,0 +1,9 @@
+# @package data_loaders.sources.main.source
+
+defaults:
+  - train_val
+
+configs:
+  raw:
+    keys:
+      "env_color": ${extra.env_color}

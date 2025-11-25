@@ -2,23 +2,21 @@
 
 model:
   _target_: models.deep_koopman.DeepKoopman
-  config:
-    _target_: models.deep_koopman.DeepKoopmanConfig
-    hidden_sizes:
-      - 512
-      - 512
-      - 512
-    lifted_dim: 256
+  hidden_sizes:
+    - 512
+    - 512
+    - 512
+  lifted_dim: 256
+  device: ${data_loaders.device}
+  dtype: ${data_loaders.dtype}
 
-data_loader:
+data_loaders:
   pairwise:
     gap: 0
-    fill_with_last: true
-  stack:
-    cur_state:
-      - 0${extra.arm_state}
-      # - 0.0${extra.eef_state}
-    cur_action:
-      - 0${extra.env_color_feat}
-    next_state:
-      - 1${extra.arm_state}
+  stacker:
+    stack:
+      cur_state: ${extra.cur_state}
+      cur_action: ${extra.cur_action}
+      next_state:
+        - 1${extra.arm_state}
+        # - 1${extra.eef_state}

@@ -5,9 +5,11 @@ import torch.nn as nn
 from class_resolver.contrib.torch import activation_resolver
 from typing import Dict, Optional, List, Literal
 from pathlib import Path
-from pydantic import BaseModel, NonNegativeInt, PositiveInt, ConfigDict
-from data.mcap_data_utils import DictBatch
+from pydantic import NonNegativeInt, PositiveInt
+from basis import DictBatch
 from mcap_data_loader.basis.cfgable import InitConfigMixin
+from mcap_data_loader.utils.array_like import get_device_auto
+from mcap_data_loader.utils.basic import DataBasicConfig
 
 
 class Encoder(nn.Module):
@@ -111,10 +113,8 @@ class Decoder(nn.Module):
         )
 
 
-class DeepKoopmanConfig(BaseModel, frozen=True):
+class DeepKoopmanConfig(DataBasicConfig):
     """Configuration for the model."""
-
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     state_dim: NonNegativeInt = 0
     """Dimension of the system state. If 0, will be inferred from data."""
@@ -218,7 +218,13 @@ class DeepKoopman(nn.Module, InitConfigMixin):
         self.save_config(path / self._config_name)
 
     def load(self, path: Optional[Path] = None):
+        # TODO: configure the ns
+        with torch.device(get_device_auto("torch", self.config.device)):
+            return self._load(path)
+
+    def _load(self, path: Optional[Path] = None):
         """Load weights while preserving the current device and dtype."""
+        # TODO: make use of the dtype config
         if path is not None:
             self = type(self)(path / self._config_name)
         config = self.config
@@ -251,128 +257,7 @@ class DeepKoopman(nn.Module, InitConfigMixin):
         else:
             a, b = None, None
         self._init_matrix(a, b)
-        if config.threshold_mode is not None:
-            self.load_fisher(fisher_path=config.fisher_path)
-        self.device = torch.get_default_device()
         return self
 
     def __repr__(self):
         return self.config.__repr__()
-
-    def load_fisher(self, fisher_path, task_id=1):
-        self.ckpt = torch.load(fisher_path)
-        self.fisher_dict = self.ckpt.get("fisher_dict", {})
-        print("[INFO] fisher_dict length:", len(self.fisher_dict))
-        print("[INFO] fisher_dict keys:", self.fisher_dict.keys())
-        if isinstance(self.fisher_dict, dict) and isinstance(
-            list(self.fisher_dict.values())[0], dict
-        ):
-            self.fisher_dict = list(self.fisher_dict.values())[task_id - 1]
-
-    def register_gradient_masks(self, threshold_mode, ewc_threshold):
-        def create_mask(fisher_tensor):
-            with torch.device(self.device):
-                mask = torch.ones_like(fisher_tensor)
-                if threshold_mode == "value":
-                    mask[fisher_tensor < ewc_threshold] = 0
-                elif threshold_mode == "neural_ratio":
-                    thresh_val = torch.quantile(fisher_tensor.view(-1), ewc_threshold)
-                    mask[fisher_tensor < thresh_val] = 0
-                elif threshold_mode == "weight_ratio":
-                    min_val = fisher_tensor.min()
-                    max_val = fisher_tensor.max()
-                    thresh_val = min_val + ewc_threshold * (max_val - min_val)
-                    mask[fisher_tensor < thresh_val] = 0
-                else:
-                    raise ValueError(f"Unsupported threshold_mode: {threshold_mode}")
-                return mask
-
-        # -------- param A --------
-        param_A = self.A
-        fisher_A = self.fisher_dict.get("A", None)
-        if fisher_A is not None and fisher_A.shape == param_A.shape:
-            mask_A = create_mask(fisher_A)
-            param_A.register_hook(lambda grad: grad * mask_A)
-        else:
-            print("[Warning] No valid Fisher info for A")
-
-        # -------- param B --------
-        param_B = self.B
-        fisher_B = self.fisher_dict.get("B", None)
-        if fisher_B is not None and fisher_B.shape == param_B.shape:
-            mask_B = create_mask(fisher_B)
-            param_B.register_hook(lambda grad: grad * mask_B)
-        else:
-            print("[Warning] No valid Fisher info for B")
-
-        # -------- encoder.layers.0.weight --------
-        param_0_w = self.encoder.layers[0].weight
-        fisher_0_w = self.fisher_dict.get("encoder.layers.0.weight", None)
-        if fisher_0_w is not None and fisher_0_w.shape == param_0_w.shape:
-            mask_0_w = create_mask(fisher_0_w)
-            param_0_w.register_hook(lambda grad: grad * mask_0_w)
-        else:
-            print("[Warning] No valid Fisher info for encoder.layers.0.weight")
-
-        # -------- encoder.layers.0.bias --------
-        param_0_b = self.encoder.layers[0].bias
-        fisher_0_b = self.fisher_dict.get("encoder.layers.0.bias", None)
-        if fisher_0_b is not None and fisher_0_b.shape == param_0_b.shape:
-            mask_0_b = create_mask(fisher_0_b)
-            param_0_b.register_hook(lambda grad: grad * mask_0_b)
-        else:
-            print("[Warning] No valid Fisher info for encoder.layers.0.bias")
-
-        # -------- encoder.layers.2.weight --------
-        param_2_w = self.encoder.layers[2].weight
-        fisher_2_w = self.fisher_dict.get("encoder.layers.2.weight", None)
-        if fisher_2_w is not None and fisher_2_w.shape == param_2_w.shape:
-            mask_2_w = create_mask(fisher_2_w)
-            param_2_w.register_hook(lambda grad: grad * mask_2_w)
-        else:
-            print("[Warning] No valid Fisher info for encoder.layers.2.weight")
-
-        # -------- encoder.layers.2.bias --------
-        param_2_b = self.encoder.layers[2].bias
-        fisher_2_b = self.fisher_dict.get("encoder.layers.2.bias", None)
-        if fisher_2_b is not None and fisher_2_b.shape == param_2_b.shape:
-            mask_2_b = create_mask(fisher_2_b)
-            param_2_b.register_hook(lambda grad: grad * mask_2_b)
-        else:
-            print("[Warning] No valid Fisher info for encoder.layers.2.bias")
-
-        # -------- encoder.layers.4.weight --------
-        param_4_w = self.encoder.layers[4].weight
-        fisher_4_w = self.fisher_dict.get("encoder.layers.4.weight", None)
-        if fisher_4_w is not None and fisher_4_w.shape == param_4_w.shape:
-            mask_4_w = create_mask(fisher_4_w)
-            param_4_w.register_hook(lambda grad: grad * mask_4_w)
-        else:
-            print("[Warning] No valid Fisher info for encoder.layers.4.weight")
-
-        # -------- encoder.layers.4.bias --------
-        param_4_b = self.encoder.layers[4].bias
-        fisher_4_b = self.fisher_dict.get("encoder.layers.4.bias", None)
-        if fisher_4_b is not None and fisher_4_b.shape == param_4_b.shape:
-            mask_4_b = create_mask(fisher_4_b)
-            param_4_b.register_hook(lambda grad: grad * mask_4_b)
-        else:
-            print("[Warning] No valid Fisher info for encoder.layers.4.bias")
-
-        # -------- encoder.layers.6.weight --------
-        param_6_w = self.encoder.layers[6].weight
-        fisher_6_w = self.fisher_dict.get("encoder.layers.6.weight", None)
-        if fisher_6_w is not None and fisher_6_w.shape == param_6_w.shape:
-            mask_6_w = create_mask(fisher_6_w)
-            param_6_w.register_hook(lambda grad: grad * mask_6_w)
-        else:
-            print("[Warning] No valid Fisher info for encoder.layers.6.weight")
-
-        # -------- encoder.layers.6.bias --------
-        param_6_b = self.encoder.layers[6].bias
-        fisher_6_b = self.fisher_dict.get("encoder.layers.6.bias", None)
-        if fisher_6_b is not None and fisher_6_b.shape == param_6_b.shape:
-            mask_6_b = create_mask(fisher_6_b)
-            param_6_b.register_hook(lambda grad: grad * mask_6_b)
-        else:
-            print("[Warning] No valid Fisher info for encoder.layers.6.bias")

@@ -2,6 +2,7 @@ from typing import runtime_checkable, Protocol, Optional, Any
 from pathlib import Path
 from typing_extensions import Self
 from mcap_data_loader.callers.stack import DictBatch
+from mcap_data_loader.basis.data_loader import Stage  # noqa: F401
 
 
 @runtime_checkable

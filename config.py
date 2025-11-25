@@ -6,95 +6,18 @@ from pydantic import (
     ConfigDict,
     Field,
 )
-from typing import List, Optional, Literal, Any, Set, Dict, Union, Tuple
-from collections.abc import Callable
+from typing import List, Optional, Literal, Any, Set, Dict
+from collections.abc import Callable, Mapping
 from functools import cache
 from pathlib import Path
 from interactor import InteractorBasis
-from basis import ModelLike
-from mcap_data_loader.pipelines import HorizonConfig, PairWiseConfig, SliceConfig
-from mcap_data_loader.callers.stack import StackType
-from mcap_data_loader.callers.dict_tuple import DictTupleConfig
-from mcap_data_loader.datasets.dataset import IterableMultiEpisodeDatasetsProtocol
-from mcap_data_loader.utils.basic import force_set_attr
+from basis import ModelLike, Stage
+from mcap_data_loader.utils.basic import force_set_attr, ConstrainedIterable
+from mcap_data_loader.basis.data_loader import DataLoaderKey
 
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
 MODEL_CONFIG = ConfigDict(validate_assignment=True, extra="forbid")
-
-
-class ParallelConfig(BaseModel, frozen=True):
-    """Configuration for parallel processing.
-    The data will be processed in parallel either in num_workers threads or
-    processes. At most one iter() is created from source, and at most one
-    thread will call next() on it at once.
-    """
-
-    model_config = MODEL_CONFIG
-
-    num_workers: NonNegativeInt = 0
-    """The number of workers to use for parallel processing. 0 means no parallelism."""
-    in_order: bool = True
-    """Whether to return items in the order from which they arrive from. If true, the iterator will return items in the order from which they arrive from source's iterator, potentially blocking even if other items are available."""
-    method: Literal["thread", "process"] = "thread"
-    """The method to use for parallel processing."""
-    multiprocessing_context: Optional[Literal["spawn", "forkserver", "fork"]] = None
-    """The multiprocessing context to use for parallel processing. 
-    If None, the OS default context will be used."""
-    max_concurrent: Optional[PositiveInt] = None
-    """At most number of items will be either processed or in the iterator's output queue, 
-    to limit CPU and Memory utilization. If None (default) the value will be 2 * num_workers."""
-    snapshot_frequency: NonNegativeInt = 1
-    """Frequency (in number of samples) to take snapshots of the parallel processing."""
-
-
-class DataLoaderConfig(BaseModel, frozen=True):
-    """Configuration for data loader."""
-
-    model_config = MODEL_CONFIG
-
-    stack: StackType = {}
-    """Stack the dict values of a list of keys into a single value with the given key."""
-    weights: List[str] = []
-    """List of weight keys for each episode."""
-    batch_size: PositiveInt = 1
-    """Batch size for data loading."""
-    drop_last: bool = False
-    """Whether to drop the last incomplete batch."""
-    num_workers: int = 0
-    """Number of workers for data loading. 0 means single-threaded."""
-    horizon: Optional[HorizonConfig] = None
-    """Configuration for horizon processing."""
-    pairwise: Optional[PairWiseConfig] = None
-    """Configuration for pairwise processing."""
-    slicing: Optional[SliceConfig] = None
-    """Configuration for slicing processing."""
-    dict_tuple: DictTupleConfig = DictTupleConfig()
-    """Configuration for dict tuple processing."""
-    parallel: ParallelConfig = ParallelConfig()
-    """Configuration for parallel processing."""
-    pin_memory_device: Optional[str] = None
-    """Device to pin memory to. If None, pin memory is not used. If set to "", defaults to "cuda" if available."""
-    pin_memory_snapshot_frequency: NonNegativeInt = 1
-    """Frequency (in number of samples) to take snapshots when using pin memory."""
-    restart_on_stop_iteration: bool = True
-    """Whether to restart the data loader when StopIteration is encountered."""
-    normalize: bool = False
-    """Whether to normalize the data."""
-
-    def model_post_init(self, context):
-        if self.horizon is not None and self.pairwise is not None:
-            raise ValueError("Cannot use both horizon and pairwise configurations.")
-
-    @property
-    def future_span(self) -> NonNegativeInt:
-        """Get the future span from the horizon configuration."""
-        if self.horizon is not None:
-            return self.horizon.future_span
-        elif self.pairwise is not None:
-            return self.pairwise.gap + 1
-        else:
-            return 0
 
 
 class CommonConfig(BaseModel, frozen=True):
@@ -102,20 +25,16 @@ class CommonConfig(BaseModel, frozen=True):
     These configurations are applicable to both training and testing
     """
 
-    stage: Literal["train", "test", "infer"]
-    """Stage of the task."""
+    stage: Stage
+    """Stage of this run."""
     root_dir: Path = Path("logs")
     """Root directory for saving logs and checkpoints."""
     checkpoints_dir: Path = Path("checkpoints")
     """Directory for saving model checkpoints."""
     checkpoint_path: Optional[Path] = Path("0")
     """Path to a specific model checkpoint. If None, no checkpoint will be saved."""
-    seed: int = 42
+    seed: Optional[int] = 42
     """Random seed for reproducibility."""
-    device: str = ""
-    """Device to load tensors onto. If empty, will use "cuda" if available else "cpu"."""
-    dtype: str = "float32"
-    """Data type for tensors. E.g., 'float32', 'float16'."""
     loss_fn: Callable[[Any, Any], Any]
     """Loss function to use."""
     tb_log_dir: Path = Path("tensorboard")
@@ -287,11 +206,6 @@ class TrainConfig(BaseModel, frozen=True):
     """List of snapshot configurations."""
     save_model: SaveModelConfig = SaveModelConfig()
     """Configuration for saving the model."""
-    train_val_split: Union[float, Tuple[int, Union[int, float]]] = 0.8
-    """Train/validation datasets split configuration.
-    If float, represents the proportion of data to use for training.
-    If tuple, when the second element is an integer, represents the `(train_step, val_step)`. This means that `train_step` data points are taken from the `episode` list, followed by `val_step` data points, and so on. The final ratio of the training set to the validation set is approximately `train_step:val_step`; when the second element is a float (< 1), it represents `(group_size, train_ratio)`. This means that the datasets is divided into multiple groups according to `group_size`. The `train_ratio` of each group is used as the training set, and the rest is used as the validation set. This method is suitable for repeatedly collecting data N times under the same settings, then changing to the next setting and continuing to collect data. After traversing M settings, there are a total of N * M episodes. During training, this partitioning method ensures that the validation set covers all different settings.
-    """
 
 
 class InferConfig(BaseModel, frozen=True):
@@ -317,20 +231,18 @@ class Config(CommonConfig):
         validate_assignment=True, extra="forbid", arbitrary_types_allowed=True
     )
 
-    datasets: IterableMultiEpisodeDatasetsProtocol
-    """Datasets for training/testing/inference."""
-    data_loader: DataLoaderConfig
-    """Configuration for the data loader."""
     model: ModelLike
     """Configuration for the model."""
+    data_loaders: Mapping[DataLoaderKey, ConstrainedIterable]
+    """Data loaders with names."""
+    interactor: Optional[InteractorBasis] = None
+    """Configuration for the interactor."""
     train: TrainConfig = TrainConfig()
     """Configuration for training."""
     test: TestConfig = TestConfig()
     """Configuration for testing."""
     infer: InferConfig = InferConfig()
     """Configuration for inference."""
-    interactor: Optional[InteractorBasis] = None
-    """Configuration for the interactor."""
     extra: Dict[str, Any] = {}
     """Extra configuration parameters. It is useful 
     to store intermediate parameters in this field in the

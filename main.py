@@ -3,6 +3,7 @@
 from runner.koopman_runner import KoopmanRunner
 from config import Config
 from hydra_zen import instantiate, store
+from omegaconf import DictConfig
 from mcap_data_loader.utils.basic import ForceSetAttr
 import hydra
 import logging
@@ -43,8 +44,11 @@ def main():
         config = instantiate(cfg)
 
     hydra.main(config_path or None, config_name, None)(convert)()
-    if config:
-        run(Config(**config))
+    if config is not None:
+        print(type(config))
+        if isinstance(config, DictConfig):
+            config = Config(**config)
+        run(config)
 
 
 if __name__ == "__main__":

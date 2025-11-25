@@ -1,28 +1,10 @@
 defaults:
   - _self_
+  - data_loaders: train_val
   - model: single
-  - dataset: train
 
-stage: train
-extra:
-  arm_state: /follow/arm/joint_state/position
-  eef_state: /follow/eef/joint_state/position
-  env_color: /env_camera/color/image_raw
-  env_color_feat: ${extra.env_color}/features_proj
-  image_keys:
-    - ${extra.env_color}
-  image_feat_keys:
-    - ${extra.env_color_feat}
-data_loader:
-  # _target_: configs.data.get_data_loader_config
-  batch_size: 64
-  dict_tuple:
-    depth: 2
-    separator: "."
-    separate_key: false
-  parallel:
-    num_workers: 0
-    snapshot_frequency: 1000
+# a custom config class can be specified here
+# _target_: configs.cfg.Config
 train:
   iteration:
     max_train_time: 20 # minutes
@@ -33,6 +15,5 @@ train:
   snapshot:
     - keys: ["train_loss", "val_loss", "min_train_loss", "min_val_loss"]
       interval: 1
-  train_val_split: [25, 0.8]
 loss_fn:
   _target_: configs.cfg.LossCalculator

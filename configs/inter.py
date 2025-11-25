@@ -1,30 +1,14 @@
 from airbot_data_collection.common.systems.basis import SystemMode
 from airbot_data_collection.common.live_data.grouped import (
-    GroupedSystemDataSourceConfig,
     GroupedSystemDataSource,
     GroupsSendActionConfig,
 )
-from airbot_data_collection.common.systems.grouped import (
-    SystemSensorComponentGroupsConfig,
-    AutoControlConfig,
-)
-# from airbot_data_collection.common.devices.cameras.v4l2 import (
-#     V4L2Camera as Camera,
-#     V4L2CameraConfig as CameraConfig,
-# )
-# from airbot_ie.robots.airbot_play import AIRBOTPlay, AIRBOTPlayConfig
-
-from airbot_data_collection.common.devices.cameras.mock import (
-    MockCamera as Camera,
-    MockCameraConfig as CameraConfig,
-)
-from airbot_ie.robots.airbot_play_mock import AIRBOTPlay, AIRBOTPlayConfig
 from mcap_data_loader.utils.basic import remove_util
 from mcap_data_loader.callers.dict_map import DictMap, DictMapConfig
+from mcap_data_loader.callers.stack import BatchStacker, BatchStackerConfig, DictBatch
 from pydantic import BaseModel
-from config import Config, ConfigDict
+from config import Config, ConfigDict, Stage
 from collections import ChainMap
-from data.mcap_data_utils import BatchStacker, BatchStackerConfig, DictBatch
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
 from interactor import InteractorBasis, YieldKey, SendValue
 from pathlib import Path
@@ -77,6 +61,10 @@ class InteractorConfig(BaseModel):
     # """Whether to display images during inference."""
     # image_transform: bool = False
     # """Whether to apply image transformations during inference."""
+    stack: BatchStackerConfig
+    """Stacking configuration for the interactor."""
+    action_mode: Literal["sampling", "resetting"] = "resetting"
+    """Mode for sending actions to the environment."""
 
 
 class Interactor(InteractorBasis):
@@ -86,9 +74,11 @@ class Interactor(InteractorBasis):
         return [remove_util(key, "/", True) for key in keys]
 
     def add_config(self, config: Config):
-        stack_dl = config.data_loader.stack
+        dl_stack_cfg = self.config.stack
+        stack_dl = dl_stack_cfg.stack
         stack_env = {}
         for cat_key, keys in stack_dl.items():
+            # remove possible next cat key
             if "next" in cat_key:
                 continue
             stack_env[cat_key] = [self._remove_prefix(row_keys) for row_keys in keys]
@@ -108,11 +98,7 @@ class Interactor(InteractorBasis):
                 stack_env.pop(key, None)
             # torch batcher for extracted data (torch tensors)
             self._extra_batcher = BatchStacker(
-                BatchStackerConfig(
-                    dtype=config.dtype,
-                    device=config.device,
-                    stack=torch_stack,
-                )
+                dl_stack_cfg.model_copy(update={"stack": torch_stack})
             )
             keys_from = extract_cfg.keys_from
             keys_to = extract_cfg.keys_to
@@ -131,19 +117,14 @@ class Interactor(InteractorBasis):
         print(f"Environment stack:\n{pformat(stack_env)}")
         # np batcher for env data (numpy arrays)
         self._env_batcher = BatchStacker(
-            BatchStackerConfig(
-                dtype=config.dtype,
-                device=config.device,
-                stack=stack_env,
-                backend_out="torch",
-            )
+            dl_stack_cfg.model_copy(update={"stack": stack_env, "backend_out": "torch"})
         )
         self._shared_config = config
         self._env_keys = set(collapse(stack_env.values()))
-        self._dic_map = DictMap(
+        self._live_dict_map = DictMap(
             DictMapConfig(
-                dtype=config.dtype,
-                device=config.device,
+                dtype=dl_stack_cfg.dtype,
+                device=dl_stack_cfg.device,
                 # TODO: torch will be much faster
                 backend_out="torch",
                 keys_include=self._env_keys,
@@ -153,30 +134,12 @@ class Interactor(InteractorBasis):
         self._init_live_data()
 
     def _init_live_data(self):
-        # TODO: make the live data configuration more flexible
-        live_data = GroupedSystemDataSource(
-            GroupedSystemDataSourceConfig(
-                components=SystemSensorComponentGroupsConfig(
-                    groups=["/"] * 2,
-                    names=["follow", "env_camera"],
-                    roles=["l", "o"],
-                    instances=[
-                        AIRBOTPlay(AIRBOTPlayConfig()),
-                        Camera(CameraConfig(camera_index="usb-0000:00:14.0-11")),
-                    ],
-                ),
-                auto_control=AutoControlConfig(groups=[]),
-            )
-        )
+        live_data: GroupedSystemDataSource = self._shared_config.data_loaders["live"]
         # if not live_data.configure():
         #     raise RuntimeError("Failed to configure the interactor environment.")
         live_data.reset()
         self.live_data = live_data
-        action_mode = (
-            SystemMode.SAMPLING
-            if self._shared_config.data_loader.future_span <= 1
-            else SystemMode.RESETTING
-        )
+        action_mode = SystemMode[self.config.action_mode.upper()]
         self.get_logger().info(f"Action mode set to {action_mode}.")
         self._action = GroupsSendActionConfig(
             groups=["/"],
@@ -186,7 +149,8 @@ class Interactor(InteractorBasis):
 
     def add_first_batch(self, batch: DictBatch):
         print(f"{list(batch.keys())=}")
-        if self._shared_config.stage == "infer":
+
+        if self._shared_config.stage is Stage.INFER:
             if (length := len(batch["cur_state"])) != 1:
                 raise ValueError(
                     f"Interactor only supports batch size of 1. Got {length}."
@@ -229,7 +193,7 @@ class Interactor(InteractorBasis):
             yield from self._set_model_output(prediction)
 
     def get_env_data(self) -> DictBatch:
-        return self._dic_map(self.live_data.read())
+        return self._live_dict_map(self.live_data.read())
 
     def _get_model_input(self, value: SendValue) -> DictBatch:
         # print(f"{batch['cur_state']=}, {batch['next_state']=}")

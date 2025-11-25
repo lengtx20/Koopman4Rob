@@ -9,11 +9,9 @@ interactor:
     model_path: "pretrained_models/blip2-itm-vit-g"
     prompt: The end effector of the robotic arm tries to get close to the QR code attached to the cabinet
     enable: false
-    keys_from:
-      - 0${extra.env_color}
+    keys_from: ${extra.image_keys}
   open_loop_predict: false
   action_from: none
   model_input_from: data_loader
-data_loader:
-  restart_on_stop_iteration: false
+  stack: ${data_loaders.stacker}
 stage: infer
