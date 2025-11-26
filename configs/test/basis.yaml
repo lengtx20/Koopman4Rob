@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - /data_loaders: test
+
+stage: test
+
+checkpoint_path: 0/best

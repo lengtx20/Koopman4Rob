@@ -1,5 +1,10 @@
 # @package _global_
 
+defaults:
+  - /data_loaders: infer_static
+  - /data_source: infer_static
+
+stage: infer
 infer:
   frequency: -1
   rollout_wait: null
@@ -14,4 +19,6 @@ interactor:
   action_from: none
   model_input_from: data_loader
   stack: ${data_loaders.stacker}
-stage: infer
+data_loaders:
+  batch_size: 1
+checkpoint_path: 0/best

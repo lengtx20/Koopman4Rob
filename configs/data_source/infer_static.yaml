@@ -1,0 +1,12 @@
+# @package data_loaders.sources.main.source
+
+defaults:
+  - train_val
+
+configs:
+  raw:
+    keys:
+      - ${extra.arm_state}
+      # - ${extra.eef_state}
+      - ${extra.env_color}
+      # - ${extra.follow_color}

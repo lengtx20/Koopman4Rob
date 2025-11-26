@@ -1,19 +1,9 @@
 defaults:
   - _self_
-  - data_loaders: train_val
   - model: single
 
 # a custom config class can be specified here
 # _target_: configs.cfg.Config
-train:
-  iteration:
-    max_train_time: 20 # minutes
-    patience: 250 # epochs
-    max_epoch: 5000
-    min_val_loss: 0.00045
-    min_train_time: 20
-  snapshot:
-    - keys: ["train_loss", "val_loss", "min_train_loss", "min_val_loss"]
-      interval: 1
+
 loss_fn:
   _target_: configs.cfg.LossCalculator

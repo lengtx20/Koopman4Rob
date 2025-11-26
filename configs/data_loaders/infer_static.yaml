@@ -2,9 +2,6 @@
 
 defaults:
   - test
-  - override /data_source:
-      - infer
-      - live
 
 data_loaders:
   batcher:
@@ -19,6 +16,3 @@ data_loaders:
           pipeline:
             1: to_loader # apply to each episode
       3: null
-sources:
-  live:
-    pipeline: null

@@ -36,7 +36,7 @@ class KoopmanRunner:
     def __init__(self, config: Config, train_data, val_data):
         set_seed(config.seed)
         self.loss_fn: Callable[[Any, Any], torch.Tensor] = config.loss_fn
-        self.mode = config.stage
+        self.stage = config.stage
         self.ewc_model = config.ewc_model
         self.train_data = train_data
         self.val_data = val_data
@@ -45,13 +45,17 @@ class KoopmanRunner:
         self.config = config
 
         # get the first batch
-        self._data_loaders = config.data_loaders
-        key = "main" if "main" in self._data_loaders else config.stage
-        data_loader = self._data_loaders.get(key, None)
+        self._data_loaders = {}
+        for key in config.data_loaders:
+            key_new = config.stage if key == "main" else key
+            self._data_loaders[key_new] = config.data_loaders[key]
+        data_loader = self._data_loaders.get(config.stage, None)
         first_batch = {}
         self.get_logger().info(f"{self._data_loaders.keys()=}")
         if data_loader is not None:
-            first_batch = first_recursive(data_loader, 2 if self.mode == "infer" else 1)
+            first_batch = first_recursive(
+                data_loader, 2 if self.stage == "infer" else 1
+            )
         elif config.stage is not Stage.INFER:
             raise RuntimeError("No data loader available.")
         self.get_logger().info(f"First batch keys: {list(first_batch.keys())}")
@@ -65,9 +69,9 @@ class KoopmanRunner:
         # load and prepare the model
         # assume the model behaves consistently across all episodes.
         config.model.add_first_batch(first_batch)
-        ckpt_dir = None if self.mode == "train" else config.checkpoint_path
+        ckpt_dir = None if self.stage is Stage.TRAIN else config.checkpoint_path
         model = config.model.load(ckpt_dir)
-        if self.mode == "train":
+        if self.stage is Stage.TRAIN:
             # TODO: configure this, ref. DP project
             self.optimizer = optim.Adam(model.parameters(), lr=1e-4)
         else:
@@ -307,16 +311,15 @@ class KoopmanRunner:
 
         # ----- save the results -----
         if test_cfg.save_results:
-            with open(model_dir / f"{self.mode}_metrics.json", "w") as f:
+            with open(model_dir / f"{self.stage}_metrics.json", "w") as f:
                 json.dump(metrics_dict, f, indent=4)
-            self.get_logger().info(
-                Bcolors.green(f"[Test-{self.mode}] Results saved to {model_dir}")
-            )
+            self.get_logger().info(Bcolors.green(f"Results saved to {model_dir}"))
 
     def infer(self):
-        data_loader = self._data_loaders.get(self.mode, None)
+        data_loader = self._data_loaders.get(self.stage, None)
         use_data_loader = False
         if data_loader:
+            data_loader = list(data_loader)
             use_data_loader = True
             num_loaders = len(data_loader)
         config = self.config

@@ -16,3 +16,6 @@ extra:
   cur_action:
     - ${extra.env_color_feat}
     # - ${extra.follow_color_feat}
+  next_state:
+    - 1${extra.arm_state}
+    # - 1${extra.eef_state}

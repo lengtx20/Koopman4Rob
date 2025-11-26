@@ -1,0 +1,17 @@
+# @package _global_
+
+defaults:
+  - static
+  - override /data_loaders:
+    - infer_static
+    - live
+  - override /data_source:
+    - infer_static
+    - live
+
+infer:
+  frequency: 0
+  rollout_wait: input
+interactor:
+  action_from: data_loader
+  action_mode: resetting

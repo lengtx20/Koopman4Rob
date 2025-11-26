@@ -1,0 +1,6 @@
+# @package _global_
+
+data_loaders:
+  sources:
+    live:
+      pipeline: null

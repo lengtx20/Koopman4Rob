@@ -134,10 +134,13 @@ class Interactor(InteractorBasis):
         self._init_live_data()
 
     def _init_live_data(self):
-        live_data: GroupedSystemDataSource = self._shared_config.data_loaders["live"]
-        # if not live_data.configure():
-        #     raise RuntimeError("Failed to configure the interactor environment.")
-        live_data.reset()
+        live_data: GroupedSystemDataSource = self._shared_config.data_loaders.get(
+            "live", None
+        )
+        if live_data is not None:
+            # if not live_data.configure():
+            #     raise RuntimeError("Failed to configure the interactor environment.")
+            live_data.reset()
         self.live_data = live_data
         action_mode = SystemMode[self.config.action_mode.upper()]
         self.get_logger().info(f"Action mode set to {action_mode}.")
@@ -148,8 +151,8 @@ class Interactor(InteractorBasis):
         )
 
     def add_first_batch(self, batch: DictBatch):
-        print(f"{list(batch.keys())=}")
-
+        self.get_logger().info(f"{batch.keys()=}")
+        self.get_logger().info(f"{batch['cur_state']=}")
         if self._shared_config.stage is Stage.INFER:
             if (length := len(batch["cur_state"])) != 1:
                 raise ValueError(
@@ -161,7 +164,8 @@ class Interactor(InteractorBasis):
                 action_values=[batch["cur_state"][0][0].tolist()],
                 modes=[SystemMode.RESETTING],
             )
-            self.live_data.write(reset_action)
+            if self.live_data is not None:
+                self.live_data.write(reset_action)
 
     def _send_action(self, action: list):
         self._action.action_values[0] = action
@@ -222,4 +226,5 @@ class Interactor(InteractorBasis):
         return data
 
     def shutdown(self):
-        return self.live_data.close()
+        if self.live_data is not None:
+            return self.live_data.close()

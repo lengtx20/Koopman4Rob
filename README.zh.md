@@ -64,13 +64,13 @@ datasets = [dataset1, dataset2]
 ## 训练
 
 ```bash
-python3 main.py
+python3 main.py +train_val=basis
 ```
 
 命令行覆盖示例（修改`batch_size`）：
 
 ```bash
-python3 main.py data_loader.batch_size=128
+python3 main.py +train_val=basis data_loaders.batch_size=128
 ```
 
 训练可以随时通过`CTRL+C`中断，模型检查点会自动保存到`logs/checkpoints/<ID>`目录下，默认会产生`best`，`last`，以及若干位于`val_loss`目录下以实际验证损失命名的检查点。
@@ -78,11 +78,10 @@ python3 main.py data_loader.batch_size=128
 ## 测试
 
 ```bash
-python3 main.py stage=test +checkpoint_path=0/best
+python3 main.py +test=basis checkpoint_path=0/best
 ```
 其中`checkpoint_path`指定要加载的模型检查点路径，相对于`logs/checkpoints`目录。
 请注意修改配置文件中的数据集配置以加载测试数据集。
-
 
 ## 推理
 
@@ -92,27 +91,32 @@ python3 main.py stage=test +checkpoint_path=0/best
 
 - 不执行动作
 ```bash
-python3 main.py +infer=basis +checkpoint_path=0/best
+python3 main.py +infer=static checkpoint_path=0/best
 ```
 
 - 执行来自数据集的动作（类似数据重放）
 ```bash
-python3 main.py +infer=basis interactor.action_from=data_loader +checkpoint_path=0/best infer.frequency=0 infer.rollout_wait=input
+python3 main.py +infer=act checkpoint_path=0/best
 ```
 
 - 执行来自模型预测的动作
 ```bash
-python3 main.py +infer=basis interactor.action_from=model +checkpoint_path=0/best infer.frequency=0 infer.rollout_wait=input
+python3 main.py +infer=act interactor.action_from=model checkpoint_path=0/best
+```
 ```
 
 ### 平台推理
 
 - 开环
 ```bash
-python3 main.py +infer=real +checkpoint_path=0/best
+python3 main.py +infer=real_only +checkpoint_path=0/best
 ```
 
 - 闭环
 ```bash
-python3 main.py +infer=real interactor.open_loop_predict=false +checkpoint_path=0/best
+python3 main.py +infer=real_only interactor.open_loop_predict=false +checkpoint_path=0/best
 ```
+
+可以通过将`real_only`改成`real`来同时加载数据集，可以利用数据集中的对应值进行某种意义上的评估（确保当前的场景与数据一致）。
+
+可以通过命令行中覆盖配置组：`data_source=live_mock`或`data_source='[live_mock, infer_static]'`来使用mock的live环境进行推理。

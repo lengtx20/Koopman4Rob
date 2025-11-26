@@ -17,6 +17,4 @@ data_loaders:
     stack:
       cur_state: ${extra.cur_state}
       cur_action: ${extra.cur_action}
-      next_state:
-        - 1${extra.arm_state}
-        # - 1${extra.eef_state}
+      next_state: ${extra.next_state}

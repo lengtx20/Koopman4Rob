@@ -1,10 +1,8 @@
 # @package _global_
 
 defaults:
-  - /data_source: train_val
   - extra
 
-stage: train
 data_loaders:
   _target_: mcap_data_loader.basis.data_loader.DataLoaders
   task_name: reach_center

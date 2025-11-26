@@ -3,7 +3,6 @@
 defaults:
   - train_val
 
-stage: test
 data_loaders:
   registry1:
     main:
