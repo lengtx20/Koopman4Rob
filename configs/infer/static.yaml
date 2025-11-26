@@ -21,4 +21,3 @@ interactor:
   stack: ${data_loaders.stacker}
 data_loaders:
   batch_size: 1
-checkpoint_path: 0/best

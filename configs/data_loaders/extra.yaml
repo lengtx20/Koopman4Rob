@@ -9,13 +9,13 @@ extra:
   follow_color_feat: ${extra.follow_color}/features_proj
   image_keys:
     - ${extra.env_color}
-    # - ${extra.follow_color}
+    - ${extra.follow_color}
   cur_state:
     - ${extra.arm_state}
     # - ${extra.eef_state}
   cur_action:
     - ${extra.env_color_feat}
-    # - ${extra.follow_color_feat}
+    - ${extra.follow_color_feat}
   next_state:
     - 1${extra.arm_state}
     # - 1${extra.eef_state}

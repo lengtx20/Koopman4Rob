@@ -2,7 +2,6 @@
 
 defaults:
   - /data_loaders: test
+  - /data_source: train_val
 
 stage: test
-
-checkpoint_path: 0/best

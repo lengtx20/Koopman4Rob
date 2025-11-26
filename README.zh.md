@@ -91,18 +91,17 @@ python3 main.py +test=basis checkpoint_path=0/best
 
 - 不执行动作
 ```bash
-python3 main.py +infer=static checkpoint_path=0/best
+python3 main.py +infer=static +checkpoint_path=0/best
 ```
 
 - 执行来自数据集的动作（类似数据重放）
 ```bash
-python3 main.py +infer=act checkpoint_path=0/best
+python3 main.py +infer=act +checkpoint_path=0/best
 ```
 
 - 执行来自模型预测的动作
 ```bash
-python3 main.py +infer=act interactor.action_from=model checkpoint_path=0/best
-```
+python3 main.py +infer=act interactor.action_from=model +checkpoint_path=0/best
 ```
 
 ### 平台推理
