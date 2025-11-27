@@ -8,7 +8,7 @@ from mcap_data_loader.callers.dict_map import DictMap, DictMapConfig
 from mcap_data_loader.callers.stack import BatchStacker, BatchStackerConfig, DictBatch
 from pydantic import BaseModel
 from config import Config, ConfigDict, Stage
-from collections import ChainMap
+from collections import ChainMap, defaultdict
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
 from interactor import InteractorBasis, YieldKey, SendValue
 from pathlib import Path
@@ -16,7 +16,8 @@ from pprint import pformat
 from typing import Literal, List
 from more_itertools import collapse
 import torch
-# import cv2
+import cv2
+import json
 
 
 class ExtractorConfig(BaseModel):
@@ -132,6 +133,7 @@ class Interactor(InteractorBasis):
             )
         )
         self._init_live_data()
+        self._rollout = 0
 
     def _init_live_data(self):
         live_data: GroupedSystemDataSource = self._shared_config.data_loaders.get(
@@ -149,6 +151,7 @@ class Interactor(InteractorBasis):
             action_values=[[]],
             modes=[action_mode],
         )
+        self._recorder = None
 
     def add_first_batch(self, batch: DictBatch):
         self.get_logger().info(f"{batch.keys()=}")
@@ -159,13 +162,22 @@ class Interactor(InteractorBasis):
                     f"Interactor only supports batch size of 1. Got {length}."
                 )
         if batch:
+            fixed_value = [0.7]
             reset_action = GroupsSendActionConfig(
                 groups=["/"],
-                action_values=[batch["cur_state"][0][0].tolist()],
+                action_values=[batch["cur_state"][0][0].tolist() + fixed_value],
                 modes=[SystemMode.RESETTING],
             )
             if self.live_data is not None:
                 self.live_data.write(reset_action)
+        if self._recorder is not None:
+            json.dump(
+                self._recorder,
+                open(f"{self._rollout}-recordings.json", "w"),
+                indent=4,
+            )
+        self._recorder = defaultdict(list)
+        self._rollout += 1
 
     def _send_action(self, action: list):
         self._action.action_values[0] = action
@@ -213,13 +225,16 @@ class Interactor(InteractorBasis):
             features = {}
             for from_key, to_key in zip(self.from_keys, self.to_keys):
                 raw_image = data[from_key][0]
-                # cv2.imwrite("raw_image.png", raw_image)
-                # assert not isinstance(raw_image, torch.Tensor)
+                cv2.imwrite(
+                    f"{from_key.removeprefix('/').replace('/', '.')}.png", raw_image
+                )
+                assert not isinstance(raw_image, torch.Tensor)
                 features[to_key] = {
                     "data": self.extractor.process_image(
                         raw_image[:, :, ::-1].copy(), self.config.extractor.prompt
                     )["features_proj"].squeeze(0)
                 }
+                self._recorder[to_key].append(features[to_key]["data"].tolist())
             # print(f"{features.keys()=}")
             batched_features = self._extra_batcher([features])
             return ChainMap(batched_features, data)
