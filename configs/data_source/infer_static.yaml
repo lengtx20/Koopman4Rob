@@ -9,4 +9,4 @@ configs:
       - ${extra.arm_state}
       # - ${extra.eef_state}
       - ${extra.env_color}
-      # - ${extra.follow_color}
+      - ${extra.follow_color}

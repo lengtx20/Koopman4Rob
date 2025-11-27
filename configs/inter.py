@@ -15,6 +15,7 @@ from pathlib import Path
 from pprint import pformat
 from typing import Literal, List
 from more_itertools import collapse
+from datetime import datetime
 import torch
 import cv2
 import json
@@ -75,6 +76,8 @@ class Interactor(InteractorBasis):
         return [remove_util(key, "/", True) for key in keys]
 
     def add_config(self, config: Config):
+        self._save_root = Path(f"logs/infer/{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        self._save_root.mkdir(parents=True, exist_ok=True)
         dl_stack_cfg = self.config.stack
         stack_dl = dl_stack_cfg.stack
         stack_env = {}
@@ -133,7 +136,7 @@ class Interactor(InteractorBasis):
             )
         )
         self._init_live_data()
-        self._rollout = 0
+        self._rollout = -1
 
     def _init_live_data(self):
         live_data: GroupedSystemDataSource = self._shared_config.data_loaders.get(
@@ -171,13 +174,13 @@ class Interactor(InteractorBasis):
             if self.live_data is not None:
                 self.live_data.write(reset_action)
         if self._recorder is not None:
-            json.dump(
-                self._recorder,
-                open(f"{self._rollout}-recordings.json", "w"),
-                indent=4,
-            )
+            path = self._save_root / f"{self._rollout}/recordings.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            json.dump(self._recorder, open(path, "w"), indent=4)
+            self.get_logger().info(f"Saved recordings to {path}.")
         self._recorder = defaultdict(list)
         self._rollout += 1
+        self._step = -1
 
     def _send_action(self, action: list):
         self._action.action_values[0] = action
@@ -213,6 +216,7 @@ class Interactor(InteractorBasis):
 
     def _get_model_input(self, value: SendValue) -> DictBatch:
         # print(f"{batch['cur_state']=}, {batch['next_state']=}")
+        self._step += 1
         last_prediction, batch = value
         data = (
             batch
@@ -225,10 +229,15 @@ class Interactor(InteractorBasis):
             features = {}
             for from_key, to_key in zip(self.from_keys, self.to_keys):
                 raw_image = data[from_key][0]
-                cv2.imwrite(
-                    f"{from_key.removeprefix('/').replace('/', '.')}.png", raw_image
+                path = (
+                    self._save_root
+                    / f"{self._rollout}/{from_key.removeprefix('/').replace('/', '.')}"
+                    / f"{self._step}.png"
                 )
-                assert not isinstance(raw_image, torch.Tensor)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(path, raw_image)
+                self.get_logger().info(f"Saved image to {path}.")
+                # assert not isinstance(raw_image, torch.Tensor)
                 features[to_key] = {
                     "data": self.extractor.process_image(
                         raw_image[:, :, ::-1].copy(), self.config.extractor.prompt
