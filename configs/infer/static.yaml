@@ -11,7 +11,7 @@ infer:
 interactor:
   _target_: configs.inter.Interactor
   extractor:
-    model_path: "pretrained_models/blip2-itm-vit-g"
+    model_path: pretrained_models/blip2-itm-vit-g
     prompt: The end effector of the robotic arm tries to get close to the QR code attached to the cabinet
     enable: false
     keys_from: ${extra.image_keys}

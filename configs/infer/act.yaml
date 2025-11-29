@@ -3,11 +3,11 @@
 defaults:
   - static
   - override /data_loaders:
-    - infer_static
-    - live
+      - infer_static
+      - live
   - override /data_source:
-    - infer_static
-    - live
+      - infer_static
+      - live
 
 infer:
   frequency: 0
