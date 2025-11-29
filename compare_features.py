@@ -4,6 +4,13 @@ import cv2
 import torch
 
 
+def cosine_similarity(a, b):
+    dot_product = torch.dot(a, b)
+    norm_a = torch.norm(a)
+    norm_b = torch.norm(b)
+    return dot_product / (norm_a * norm_b).item()
+
+
 extractor = Blip2ImageFeatureExtractor(model_path="pretrained_models/blip2-itm-vit-g")
 prompt = "The end effector of the robotic arm tries to get close to the QR code attached to the cabinet"
 extractor.load_model()
@@ -23,5 +30,6 @@ for date in ["20251129_212239"]:
                     0
                 )
                 features.append(feature)
-            print(torch.norm(features[0]) - torch.norm(features[1]).tolist())
-            print(name, torch.norm(features[0] - features[1]).tolist())
+            # print(torch.norm(features[0]) - torch.norm(features[1]).tolist())
+            print("norm:", name, torch.norm(features[0] - features[1]).tolist())
+            print("cosine", name, cosine_similarity(*features))
