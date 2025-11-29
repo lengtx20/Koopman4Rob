@@ -8,7 +8,7 @@ def cosine_similarity(a, b):
     dot_product = torch.dot(a, b)
     norm_a = torch.norm(a)
     norm_b = torch.norm(b)
-    return dot_product / (norm_a * norm_b).item()
+    return (dot_product / (norm_a * norm_b)).item()
 
 
 extractor = Blip2ImageFeatureExtractor(model_path="pretrained_models/blip2-itm-vit-g")

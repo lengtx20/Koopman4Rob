@@ -8,7 +8,7 @@ from mcap_data_loader.callers.dict_map import DictMap, DictMapConfig
 from mcap_data_loader.callers.stack import BatchStacker, BatchStackerConfig, DictBatch
 from pydantic import BaseModel
 from config import Config, ConfigDict, Stage
-from collections import ChainMap, defaultdict
+from collections import defaultdict
 from data.blip2_feature_extractor import Blip2ImageFeatureExtractor
 from interactor import InteractorBasis, YieldKey, SendValue
 from pathlib import Path
@@ -265,7 +265,9 @@ class Interactor(InteractorBasis):
             self.get_logger().info(
                 f"features diff: {(batched_features['cur_action'] - batch['cur_action']).norm()}"
             )
-            return ChainMap(batched_features, data)
+            data.update(batched_features)
+            # print(f"{data.keys()=}")
+            return data
         return data
 
     def shutdown(self):
