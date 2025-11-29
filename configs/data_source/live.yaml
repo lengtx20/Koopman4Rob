@@ -2,12 +2,14 @@
 
 _target_: airbot_data_collection.common.live_data.grouped.GroupedSystemDataSource
 components:
-  groups: [/, /]
-  names: [follow, env_data]
-  roles: [l, o]
+  groups: [/, /, /]
+  names: [follow, env_camera, follow_camera]
+  roles: [l, o, o]
   instances:
     - _target_: airbot_ie.robots.airbot_play.AIRBOTPlay
     - _target_: airbot_data_collection.common.devices.cameras.v4l2.V4L2Camera
       camera_index: usb-0000:00:14.0-11
+    - _target_: airbot_data_collection.common.devices.cameras.v4l2.V4L2Camera
+      camera_index: usb-0000:00:14.0-10.2
 auto_control:
   groups: []

@@ -374,6 +374,7 @@ class KoopmanRunner:
                                 _, value = next(generator)[0]
                                 prediction = self.model(value)
                                 self._update_loss(prediction, batch_data, losses)
+                                yielded = ...
                                 while True:
                                     # send back the prediction and get the next command
                                     yielded = generator.send((prediction, batch_data))
@@ -419,8 +420,12 @@ class KoopmanRunner:
                                         raise value
                                     elif issubclass(value, BaseException):
                                         raise value("Interactor requested exception")
-                                    else:
-                                        pass
+                                    # else:
+                                    #     pass
+                                else:
+                                    if yielded is ...:
+                                        # logger.info(f"Step: {step} stopped: {e}")
+                                        rate.sleep()
                     except KeyboardInterrupt:
                         logger.info(
                             Bcolors.blue(

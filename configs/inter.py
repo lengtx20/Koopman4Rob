@@ -21,10 +21,10 @@ import cv2
 import json
 
 
-class ExtractorConfig(BaseModel):
+class ExtractorConfig(BaseModel, frozen=True):
     """Configuration for the feature extractor."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     model_path: Path
     """Path to the pre-trained BLIP2 model."""
@@ -44,10 +44,10 @@ class ExtractorConfig(BaseModel):
             raise ValueError("Prompt for BLIP2 model cannot be empty.")
 
 
-class InteractorConfig(BaseModel):
+class InteractorConfig(BaseModel, frozen=True):
     """Configuration for the interactor between the model and the environment."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     extractor: ExtractorConfig
     """Configuration for the feature extractor."""
@@ -59,8 +59,10 @@ class InteractorConfig(BaseModel):
     model_input_from: Literal["env", "data_loader"] = "env"
     """Source of model inputs. 'env' uses data from the environment, 
     'data_loader' uses data from the data loader."""
-    # show_image: bool = False
-    # """Whether to display images during inference."""
+    save_image: bool = False
+    """Whether to save images during inference."""
+    show_image: bool = False
+    """Whether to display images during inference."""
     # image_transform: bool = False
     # """Whether to apply image transformations during inference."""
     stack: BatchStackerConfig
@@ -183,6 +185,7 @@ class Interactor(InteractorBasis):
         self._step = -1
 
     def _send_action(self, action: list):
+        self.get_logger().info(f"sending action: {action}")
         self._action.action_values[0] = action
         self.live_data.write(self._action)
         _ = yield
@@ -218,34 +221,50 @@ class Interactor(InteractorBasis):
         # print(f"{batch['cur_state']=}, {batch['next_state']=}")
         self._step += 1
         last_prediction, batch = value
-        data = (
-            batch
-            if self.config.model_input_from == "data_loader"
-            else self._env_batcher([self.get_env_data()])
-        )
-        if self.config.open_loop_predict and last_prediction is not None:
+        config = self.config
+        use_batch = config.model_input_from == "data_loader"
+        data = batch if use_batch else self._env_batcher([self.get_env_data()])
+        if config.open_loop_predict and last_prediction is not None:
             data["cur_state"] = last_prediction
         if self.use_extractor:
             features = {}
             for from_key, to_key in zip(self.from_keys, self.to_keys):
                 raw_image = data[from_key][0]
-                path = (
-                    self._save_root
-                    / f"{self._rollout}/{from_key.removeprefix('/').replace('/', '.')}"
-                    / f"{self._step}.png"
+                if use_batch:
+                    rgb_image = raw_image
+                    bgr_image = raw_image[:, :, ::-1].copy()
+                else:
+                    rgb_image = raw_image[:, :, ::-1].copy()
+                    bgr_image = raw_image
+                rollout_root = self._save_root / str(self._rollout)
+                image_rela_path = (
+                    f"{from_key.removeprefix('/').replace('/', '.')}/{self._step}.png"
                 )
+                path = rollout_root / image_rela_path
                 path.parent.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(path, raw_image)
-                self.get_logger().info(f"Saved image to {path}.")
+                if config.save_image:
+                    cv2.imwrite(path, bgr_image)
+                    if not use_batch:  # save batch images as well for test
+                        batch_path = rollout_root / "batch" / image_rela_path
+                        batch_path.parent.mkdir(parents=True, exist_ok=True)
+                        cv2.imwrite(batch_path, batch[from_key][0][:, :, ::-1])
+                    self.get_logger().info(f"Saved image to {path}.")
+                if config.show_image:
+                    cv2.imshow(from_key, bgr_image)
                 # assert not isinstance(raw_image, torch.Tensor)
                 features[to_key] = {
                     "data": self.extractor.process_image(
-                        raw_image[:, :, ::-1].copy(), self.config.extractor.prompt
+                        rgb_image, config.extractor.prompt
                     )["features_proj"].squeeze(0)
                 }
                 self._recorder[to_key].append(features[to_key]["data"].tolist())
             # print(f"{features.keys()=}")
+            # print(f"{batch['cur_action'].norm()=}")
             batched_features = self._extra_batcher([features])
+            # compare features
+            self.get_logger().info(
+                f"features diff: {(batched_features['cur_action'] - batch['cur_action']).norm()}"
+            )
             return ChainMap(batched_features, data)
         return data
 

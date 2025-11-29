@@ -199,6 +199,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--model-path",
+        "-mp",
+        type=str,
+        help="Path to the BLIP2 model",
+        default="pretrained_models/blip2-itm-vit-g",
+    )
+    parser.add_argument(
         "--input-directory", "-id", type=str, help="Directory containing the dataset"
     )
     parser.add_argument(
@@ -226,7 +233,6 @@ if __name__ == "__main__":
             "/follow_camera/color/image_raw",
         ],
     )
-    parser.add_argument("--model-path", "-mp", type=str, help="Path to the BLIP2 model")
     parser.add_argument(
         "--num-workers", "-nw", type=int, default=4, help="Number of workers"
     )
@@ -253,7 +259,7 @@ if __name__ == "__main__":
             keys=keys,
             strict=False,
             media_configs=[DecodeConfig(mismatch_tolerance=5, frame_format="rgb24")],
-            rearrange=DataRearrangeConfig(episode=RearrangeType.SORT_STEM_DIGITAL),
+            rearrange=DataRearrangeConfig(dataset=RearrangeType.SORT_STEM_DIGITAL),
         )
     )
     output_dir = args.output_directory

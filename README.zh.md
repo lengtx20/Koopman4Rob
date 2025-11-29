@@ -90,8 +90,13 @@ python3 main.py +test=basis checkpoint_path=0/best
 ### 数据集推理
 
 - 不执行动作
+使用预提取的特征：
 ```bash
 python3 main.py +infer=static +checkpoint_path=0/best
+```
+从原始数据集中实时提取特征：
+```bash
+python3 main.py +infer=static interactor.extractor.enable=true +checkpoint_path=0/best
 ```
 
 - 执行来自数据集的动作（类似数据重放）

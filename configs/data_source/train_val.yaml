@@ -5,6 +5,9 @@ common:
   strict: false
   rearrange:
     dataset: sort_stem_digital
+  media_configs:
+    - _target_: mcap_data_loader.utils.av_coder.DecodeConfig
+      frame_format: rgb24
 configs:
   raw:
     data_root: ${data_loaders.data_root}/${data_loaders.task_name}
