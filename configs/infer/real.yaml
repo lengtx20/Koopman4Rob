@@ -9,3 +9,4 @@ interactor:
   open_loop_predict: true
   action_from: model
   model_input_from: env
+  save_image: true

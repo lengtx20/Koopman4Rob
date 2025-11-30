@@ -143,6 +143,8 @@ class DeepKoopman(nn.Module, InitConfigMixin):
         self._config_name = "config.yaml"
 
     def add_first_batch(self, batch: DictBatch) -> None:
+        if not batch:
+            return
         # get the state and action dims
         config = self.config
         state_dim = (

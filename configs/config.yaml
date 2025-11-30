@@ -1,4 +1,5 @@
 defaults:
+  - extra
   - _self_
   - model: single
 

@@ -1,6 +1,9 @@
+ckpt_id=0
 com="data_loaders.pairwise.gap=10"
-ckpt_id=5
-task_name="data_loaders.task_name=reach_center_new"
-compare="interactor.extractor.enable=true interactor.model_input_from=data_loader +interactor.save_image=true"
-action="interactor.action_from=model"
-python3 main.py ${com} ${task_name} ${compare} ${action} +infer=act +checkpoint_path=${ckpt_id}/best
+task_name="data_loaders.task_name=reach_center_1130"
+data_cfg="${com} ${task_name}"
+# mode="+infer=act ${data_cfg}"
+mode="+infer=real ${data_cfg}"
+# mode="+infer=real_only"
+python3 main.py ${mode} +checkpoint_path=${ckpt_id}/best
+# python3 main.py +train_val=basis ${task_name} ${com}

@@ -1,6 +1,7 @@
 # @package _global_
 
 data_loaders:
+  _target_: mcap_data_loader.basis.data_loader.DataLoaders
   sources:
     live:
       pipeline: null

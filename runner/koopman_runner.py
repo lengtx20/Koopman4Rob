@@ -327,7 +327,6 @@ class KoopmanRunner:
         interactor = config.interactor
         freq = infer_cfg.frequency
         max_steps = infer_cfg.max_steps
-        prediction = None
         rate = create_sleeper(freq)
         all_losses = []
         logger = self.get_logger()
@@ -335,6 +334,7 @@ class KoopmanRunner:
         with torch.no_grad():
             try:
                 for rollout in count():
+                    prediction = None
                     losses = []
                     max_rollouts = infer_cfg.max_rollouts
                     if max_rollouts > 0 and rollout > max_rollouts:

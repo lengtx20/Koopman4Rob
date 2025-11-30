@@ -69,6 +69,8 @@ class InteractorConfig(BaseModel, frozen=True):
     """Stacking configuration for the interactor."""
     action_mode: Literal["sampling", "resetting"] = "resetting"
     """Mode for sending actions to the environment."""
+    # reset_action: List[float]
+    """"""
 
 
 class Interactor(InteractorBasis):
@@ -159,14 +161,14 @@ class Interactor(InteractorBasis):
         self._recorder = None
 
     def add_first_batch(self, batch: DictBatch):
-        self.get_logger().info(f"{batch.keys()=}")
-        self.get_logger().info(f"{batch['cur_state']=}")
-        if self._shared_config.stage is Stage.INFER:
-            if (length := len(batch["cur_state"])) != 1:
-                raise ValueError(
-                    f"Interactor only supports batch size of 1. Got {length}."
-                )
         if batch:
+            self.get_logger().info(f"{batch.keys()=}")
+            self.get_logger().info(f"{batch['cur_state']=}")
+            if self._shared_config.stage is Stage.INFER:
+                if (length := len(batch["cur_state"])) != 1:
+                    raise ValueError(
+                        f"Interactor only supports batch size of 1. Got {length}."
+                    )
             fixed_value = [0.7]
             reset_action = GroupsSendActionConfig(
                 groups=["/"],
@@ -267,6 +269,7 @@ class Interactor(InteractorBasis):
             )
             data.update(batched_features)
             # print(f"{data.keys()=}")
+            self.get_logger().info(f"{data['cur_state']=}")
             return data
         return data
 

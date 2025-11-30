@@ -1,14 +1,9 @@
 # @package _global_
 
-defaults:
-  - extra
-
 data_loaders:
   _target_: mcap_data_loader.basis.data_loader.DataLoaders
   task_name: reach_center
   data_root: mcap_data
-  device: auto
-  dtype: float32
   batch_size: 64
   nested_zip:
     depth: 1
@@ -23,10 +18,10 @@ data_loaders:
     snapshot_frequency: 1000
   stacker:
     backend_out: torch
-    device: ${data_loaders.device}
-    dtype: ${data_loaders.dtype}
+    device: ${extra.device}
+    dtype: ${extra.dtype}
   split:
-    grouped_ratio: [25, 0.8]
+    grouped_ratio: [10, 0.8]
   registry0:
     _target_: mcap_data_loader.pipelines.register_named_pipelines
     # the key must be a string type, or you can put it in `named_pipelines` field
