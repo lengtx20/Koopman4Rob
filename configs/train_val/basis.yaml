@@ -6,11 +6,11 @@ defaults:
 
 train:
   iteration:
-    max_train_time: 20 # minutes
+    max_train_time: 10 # minutes
     patience: 250 # epochs
-    max_epoch: 5000
+    max_epoch: 1000
     min_val_loss: 0.00045
-    min_train_time: 20
+    min_train_time: 10
   snapshot:
     - keys: ["train_loss", "val_loss", "min_train_loss", "min_val_loss"]
       interval: 1

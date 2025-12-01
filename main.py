@@ -42,13 +42,13 @@ def main():
     def convert(cfg):
         nonlocal config
         config = instantiate(cfg)
+        if config is not None:
+            print(type(config))
+            if isinstance(config, DictConfig):
+                config = Config(**config)
+            run(config)
 
     hydra.main(config_path or None, config_name, None)(convert)()
-    if config is not None:
-        print(type(config))
-        if isinstance(config, DictConfig):
-            config = Config(**config)
-        run(config)
 
 
 if __name__ == "__main__":

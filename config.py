@@ -222,8 +222,11 @@ class InferConfig(BaseModel, frozen=True):
     0 means wait for any input after every step. Negative means no limit.
     """
     rollout_wait: Any = "input"
-    """"""
+    """The wait method between rollouts. It can be 'input' to wait for user input,
+    or a numeric value indicating seconds to wait.
+    """
     start_rollout: NonNegativeInt = 0
+    """The starting rollout index."""
 
 
 class Config(CommonConfig):
