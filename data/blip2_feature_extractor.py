@@ -220,7 +220,7 @@ if __name__ == "__main__":
         "-prom",
         type=str,
         help="Prompt for feature extraction",
-        default="The end effector of the robotic arm tries to get close to the QR code attached to the cabinet.",
+        default="The end effector of the robotic arm tries to get close to the block placed on the table.",
     )
     parser.add_argument(
         "--keys",

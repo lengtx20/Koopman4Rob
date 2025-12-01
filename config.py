@@ -222,6 +222,8 @@ class InferConfig(BaseModel, frozen=True):
     0 means wait for any input after every step. Negative means no limit.
     """
     rollout_wait: Any = "input"
+    """"""
+    start_rollout: NonNegativeInt = 0
 
 
 class Config(CommonConfig):

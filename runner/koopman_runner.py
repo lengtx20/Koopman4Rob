@@ -334,6 +334,7 @@ class KoopmanRunner:
         with torch.no_grad():
             try:
                 for rollout in count():
+                    rollout += config.infer.start_rollout
                     prediction = None
                     losses = []
                     max_rollouts = infer_cfg.max_rollouts

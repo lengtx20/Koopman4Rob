@@ -21,7 +21,7 @@ data_loaders:
     device: ${extra.device}
     dtype: ${extra.dtype}
   split:
-    grouped_ratio: [10, 0.8]
+    grouped_ratio: [25, 0.8]
   registry0:
     _target_: mcap_data_loader.pipelines.register_named_pipelines
     # the key must be a string type, or you can put it in `named_pipelines` field
