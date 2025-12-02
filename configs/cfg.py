@@ -14,7 +14,7 @@ class LossCalculator:
         # batch = batch_data["next_state"].squeeze(1)
         # print(f"Norm error: {(predictions - batch).norm() / torch.pi * 180:.4f}")
         # print(f"RMSE error: {((predictions - batch) ** 2).mean().sqrt() / torch.pi * 180:.4f}")
-        return self._func(predictions, batch_data["next_state"].squeeze(1))
+        return self._func(predictions, batch_data["next_state"])
 
     def dump(self):
         return {

@@ -1,20 +1,8 @@
 # @package _global_
 
+defaults:
+  - basis@model
+  - loader
+
 model:
   _target_: models.deep_koopman.DeepKoopman
-  hidden_sizes:
-    - 512
-    - 512
-    - 512
-  lifted_dim: 256
-  device: ${extra.device}
-  dtype: ${extra.dtype}
-
-data_loaders:
-  pairwise:
-    gap: 0
-  stacker:
-    stack:
-      cur_state: ${extra.cur_state}
-      cur_action: ${extra.cur_action}
-      next_state: ${extra.next_state}

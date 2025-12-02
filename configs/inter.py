@@ -186,23 +186,24 @@ class Interactor(InteractorBasis):
         self._rollout += 1
         self._step = -1
 
-    def _send_action(self, action: list):
-        self.get_logger().info(f"sending action: {action}")
-        self._action.action_values[0] = action
-        self.live_data.write(self._action)
-        _ = yield
-
     def _send_actions(self, actions: List[list]):
         for action in actions:
-            yield from self._send_action(action)
+            self.get_logger().info(f"sending action: {action}")
+            self._action.action_values[0] = action
+            self.live_data.write(self._action)
+            _ = yield
 
     def _set_model_output(self, pred: torch.Tensor):
         # TODO: should we unify the pred to be BTD?
-        if len(pred.shape) == 2:
-            func = self._send_action
-        else:
-            func = self._send_actions
-        return func(pred[0].tolist())
+        if len(pred.shape) != 3:
+            raise ValueError(
+                f"Expected prediction shape to be 3 (BTD), got {pred.shape}"
+            )
+        elif pred.shape[0] != 1:
+            raise ValueError(
+                f"Expected batch size of 1 for prediction, got {pred.shape[0]}"
+            )
+        return self._send_actions(pred.squeeze(0).tolist())
 
     def _set_batch(self, batch: DictBatch):
         return self._send_actions(batch["next_state"][0].tolist())
@@ -210,6 +211,7 @@ class Interactor(InteractorBasis):
     def interact(self, value):
         # first request for the model prediction
         prediction, batch = yield ((YieldKey.PREDICT, self._get_model_input(value)),)
+        # print(f"{prediction.shape=}")
         # then send actions based on the prediction and batches
         if self.config.action_from == "data_loader":
             yield from self._set_batch(batch)

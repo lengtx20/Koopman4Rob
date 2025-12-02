@@ -186,11 +186,11 @@ class DeepKoopman(nn.Module, InitConfigMixin):
         """x -> z"""
         return self.encoder(x)
 
-    def decode(self, z, get_action=False):
+    def decode(self, z, get_action=False) -> torch.Tensor:
         """z -> x"""
         return self.decoder(z, get_action)
 
-    def linear_dynamics(self, z: torch.Tensor, u: torch.Tensor):
+    def linear_dynamics(self, z: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
         """z -> z_next = A * z + B * u"""
         return (self.A @ z.T + self.B @ u.T).T
 
@@ -199,8 +199,9 @@ class DeepKoopman(nn.Module, InitConfigMixin):
     ) -> torch.Tensor:
         """Predict next state: x -> z -> z_next -> x_next"""
         z = self.encode(batch["cur_state"].squeeze(1))
-        z_next = self.linear_dynamics(z, batch["cur_action"].squeeze(1))
-        return self.decode(z_next, get_action)
+        z_next = self.linear_dynamics(z, batch["cur_action"].squeeze(1)[:, :256])
+        # the prediction dim should be (B, T, D)
+        return self.decode(z_next, get_action).unsqueeze(1)
 
     def freeze_matrix(self):
         pass

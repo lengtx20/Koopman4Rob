@@ -1,0 +1,7 @@
+hidden_sizes:
+  - 512
+  - 512
+  - 512
+lifted_dim: 256
+device: ${extra.device}
+dtype: ${extra.dtype}

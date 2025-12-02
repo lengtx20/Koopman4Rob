@@ -1,0 +1,8 @@
+# @package _global_
+
+data_loaders:
+  stacker:
+    stack:
+      cur_state: ${extra.cur_state}
+      cur_action: ${extra.cur_action}
+      next_state: ${extra.next_state}
