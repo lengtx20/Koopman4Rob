@@ -230,7 +230,7 @@ class Interactor(InteractorBasis):
         use_batch = config.model_input_from == "data_loader"
         data = batch if use_batch else self._env_batcher([self.get_env_data()])
         if config.open_loop_predict and last_prediction is not None:
-            data["cur_state"] = last_prediction
+            data["cur_state"] = last_prediction[:, -1]
         if self.use_extractor:
             features = {}
             for from_key, to_key in zip(self.from_keys, self.to_keys):

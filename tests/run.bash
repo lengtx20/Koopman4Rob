@@ -12,8 +12,8 @@ data_cfg="${com} ${task_name}"
 model_cfg="model=multi"
 # mode="+infer=act ${data_cfg} ${model_cfg}"
 # mode="+infer=act_mock ${data_cfg} ${model_cfg}"
-mode="+infer=act ${data_cfg} ${model_cfg} interactor.action_from=model interactor.extractor.enable=true"
-# mode="+infer=real ${data_cfg} ${model_cfg}"
+# mode="+infer=act ${data_cfg} ${model_cfg} interactor.action_from=model interactor.extractor.enable=true +infer.start_rollout=60"
+mode="+infer=real ${data_cfg} ${model_cfg}"
 # mode="+infer=real_only ${model_cfg}"
 python3 main.py ${mode} +checkpoint_path=${ckpt_path}
 # python3 main.py -m +train_val=basis ${data_cfg}
