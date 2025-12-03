@@ -325,9 +325,9 @@ class KoopmanRunner:
         config = self.config
         infer_cfg = config.infer
         interactor = config.interactor
-        freq = infer_cfg.frequency
         max_steps = infer_cfg.max_steps
-        rate = create_sleeper(freq)
+        rate = create_sleeper(infer_cfg.frequency)
+        rate_inner = create_sleeper(infer_cfg.frequency_inner)
         all_losses = []
         logger = self.get_logger()
         logger.info(Bcolors.cyan("Starting inference..."))
@@ -399,7 +399,7 @@ class KoopmanRunner:
                                     #     f"{(time.perf_counter() - start):.4f} seconds"
                                     # )
                                     # start = time.perf_counter()
-                                    rate.sleep()
+                                    rate_inner.sleep()
                             except StopIteration as e:
                                 value = e.value
                                 if value is not None:
@@ -421,12 +421,8 @@ class KoopmanRunner:
                                         raise value
                                     elif issubclass(value, BaseException):
                                         raise value("Interactor requested exception")
-                                    # else:
-                                    #     pass
                                 else:
-                                    if yielded is ...:
-                                        # logger.info(f"Step: {step} stopped: {e}")
-                                        rate.sleep()
+                                    rate.sleep()
                     except KeyboardInterrupt:
                         logger.info(
                             Bcolors.blue(

@@ -11,8 +11,8 @@ defaults:
 
 infer:
   frequency: 0
+  frequency_inner: 20
   rollout_wait: input
   # start_rollout: 18
 interactor:
   action_from: data_loader
-  action_mode: resetting

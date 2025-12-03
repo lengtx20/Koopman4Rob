@@ -199,7 +199,7 @@ class DeepKoopman(nn.Module, InitConfigMixin):
     ) -> torch.Tensor:
         """Predict next state: x -> z -> z_next -> x_next"""
         z = self.encode(batch["cur_state"].squeeze(1))
-        z_next = self.linear_dynamics(z, batch["cur_action"].squeeze(1)[:, :256])
+        z_next = self.linear_dynamics(z, batch["cur_action"].squeeze(1))
         # the prediction dim should be (B, T, D)
         return self.decode(z_next, get_action).unsqueeze(1)
 

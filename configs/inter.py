@@ -191,10 +191,11 @@ class Interactor(InteractorBasis):
             self.get_logger().info(f"sending action: {action}")
             self._action.action_values[0] = action
             self.live_data.write(self._action)
+            # here you can yield YieldKey.NEXT_BATCH to iter
+            # the batch data
             _ = yield
 
     def _set_model_output(self, pred: torch.Tensor):
-        # TODO: should we unify the pred to be BTD?
         if len(pred.shape) != 3:
             raise ValueError(
                 f"Expected prediction shape to be 3 (BTD), got {pred.shape}"

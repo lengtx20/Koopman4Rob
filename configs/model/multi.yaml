@@ -10,3 +10,6 @@ model:
     - _target_: models.deep_koopman.DeepKoopman
       config: ${extra.model_config}
   axis: 1 # concat axis alone the T dimension
+
+interactor:
+  action_mode: sampling

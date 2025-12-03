@@ -221,6 +221,8 @@ class InferConfig(BaseModel, frozen=True):
     """The frequency (in steps) to send action commands.
     0 means wait for any input after every step. Negative means no limit.
     """
+    frequency_inner: int = 0
+    """The frequency (in each step loop) to send action commands."""
     rollout_wait: Any = "input"
     """The wait method between rollouts. It can be 'input' to wait for user input,
     or a numeric value indicating seconds to wait.
