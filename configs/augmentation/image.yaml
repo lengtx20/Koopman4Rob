@@ -1,0 +1,32 @@
+_target_: mcap_data_loader.callers.Map
+callable:
+  _target_: torchvision.transforms.v2.Compose
+  transforms:
+    - _target_: torchvision.transforms.v2.ToImage
+    - _target_: torchvision.transforms.v2.ToDtype
+      dtype:
+        _target_: mcap_data_loader.utils.array_like.convert_str_dtype
+        ns: torch
+        dtype: float32
+      scale: true
+    - _target_: torchvision.transforms.v2.RandomPhotometricDistort
+      p: 0.13
+    - _target_: torchvision.transforms.v2.ColorJitter
+      brightness: [0.5, 1.5]
+      contrast: [0.5, 1.5]
+    - _target_: torchvision.transforms.v2.RandomAdjustSharpness
+      sharpness_factor: 2
+      p: 1.0
+    - _target_: torchvision.transforms.v2.RandomGrayscale
+      p: 0.13
+    - _target_: torchvision.transforms.v2.RandomErasing
+      p: 0.13
+      scale: [0.02, 0.02]
+      ratio: [0.3, 0.3]
+      value: random
+    - _target_: mcap_data_loader.callers.Curry
+      callable: mcap_data_loader.utils.array_like.tensor_to_ndarray
+      kwargs:
+        transpose: [1, 2, 0]
+        scale: 255
+        dtype: uint8
