@@ -175,9 +175,9 @@ class DeepKoopman(nn.Module, InitConfigMixin):
         """x -> z"""
         return self.encoder(x)
 
-    def decode(self, z, get_action=False) -> torch.Tensor:
+    def decode(self, z) -> torch.Tensor:
         """z -> x"""
-        return self.decoder(z, get_action)
+        return self.decoder(z)
 
     def linear_dynamics(self, z: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
         """z -> z_next = A * z + B * u"""
@@ -186,24 +186,24 @@ class DeepKoopman(nn.Module, InitConfigMixin):
         z_item = self.A @ z.T
         u_item = self.B @ u.T
         state_dim = self.config.state_dim
-        z_state = z_item.squeeze(0)[:state_dim]
-        u_state = u_item.squeeze(0)[:state_dim]
-        z_state_norm = torch.norm(z_state)
-        u_state_norm = torch.norm(u_state)
+        z_state = z_item.squeeze(1)[:state_dim]
+        u_delta = u_item.squeeze(1)[:state_dim]
+        z_delta = z_state - z.squeeze(0)[:state_dim]
+        z_delta_norm = torch.norm(z_delta)
+        u_delta_norm = torch.norm(u_delta)
         self.get_logger().info(
-            f"{z_state=}, norm={z_state_norm.item():.6f}; {u_state=}, norm={u_state_norm.item():.6f}"
+            f"{z_delta=}, {u_delta=}\n"
+            f"{z_delta_norm.item()=:.6f}, {u_delta_norm.item()=:.6f}"
         )
         return (z_item + u_item).T
 
-    def forward(
-        self, batch: Dict[str, torch.Tensor], get_action: bool = False
-    ) -> torch.Tensor:
+    def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Predict next state: x -> z -> z_next -> x_next"""
         z = self.encode(batch["cur_state"].squeeze(1))
         z_next = self.linear_dynamics(z, batch["cur_action"].squeeze(1))
         # the prediction dim should be (B, T, D)
         # unsqueeze to make T=1
-        return self.decode(z_next, get_action).unsqueeze(1)
+        return self.decode(z_next).unsqueeze(1)
 
     def save(self, path: Path):
         torch.save(self.encoder.state_dict(), path / "encoder.pth")
