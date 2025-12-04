@@ -6,6 +6,7 @@ from airbot_data_collection.common.live_data.grouped import (
 from mcap_data_loader.utils.basic import remove_util
 from mcap_data_loader.callers.dict_map import DictMap, DictMapConfig
 from mcap_data_loader.callers.stack import BatchStacker, BatchStackerConfig, DictBatch
+from mcap_data_loader.utils.hydra_utils import hydra_instance_from_config_path
 from pydantic import BaseModel
 from config import Config, ConfigDict, Stage
 from collections import defaultdict
@@ -141,6 +142,7 @@ class Interactor(InteractorBasis):
         )
         self._init_live_data()
         self._rollout = -1
+        self._trans = hydra_instance_from_config_path("configs/augmentation/image.yaml")
 
     def _init_live_data(self):
         live_data: GroupedSystemDataSource = self._shared_config.data_loaders.get(
@@ -235,6 +237,8 @@ class Interactor(InteractorBasis):
             features = {}
             for from_key, to_key in zip(self.from_keys, self.to_keys):
                 raw_image = data[from_key][0]
+                # raw_image = next(iter(self._trans([raw_image])))
+                # raw_image = raw_image * 0
                 if use_batch:
                     rgb_image = raw_image
                     bgr_image = raw_image[:, :, ::-1].copy()
@@ -256,6 +260,7 @@ class Interactor(InteractorBasis):
                     self.get_logger().info(f"Saved image to {path}.")
                 if config.show_image:
                     cv2.imshow(from_key, bgr_image)
+                    cv2.waitKey(1)
                 # assert not isinstance(raw_image, torch.Tensor)
                 features[to_key] = {
                     "data": self.extractor.process_image(
