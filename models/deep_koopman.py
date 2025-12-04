@@ -65,8 +65,7 @@ class Decoder(nn.Module):
         hidden_sizes,
         lifted_dim,
         activation,
-        include_iden_state=True,
-        iden_decoder=True,
+        identity=True,
     ):
         """iden_decoder: if set True, the decoder will be a simple slice of the lifted vector. C = I."""
         super().__init__()
@@ -76,10 +75,9 @@ class Decoder(nn.Module):
         self.lifted_dim = lifted_dim
         self.hidden_sizes = hidden_sizes
         self.activation = activation
-        self.include_iden_state = include_iden_state
-        self.iden_decoder = iden_decoder
+        self.identity = identity
 
-        if not self.iden_decoder:
+        if not self.identity:
             layers = []
             self.sizes = [self.lifted_dim] + hidden_sizes + [state_dim]
             last_i = len(self.sizes) - 2
@@ -92,24 +90,18 @@ class Decoder(nn.Module):
                     layers.append(activation_resolver.make(activation))
             self.layers = nn.Sequential(*layers)
 
-    def forward(self, z, get_action=False):
-        """
-        If get_action is true, the return of decoder will also contain a self-defined a_t1.
-        This is to enhance the flexibility when doing multi-step prediction.
-        This part needs to be modified by user.
-        """
-        if self.include_iden_state and self.iden_decoder:
+    def forward(self, z):
+        if self.identity:
             decoded = z[:, : self.state_dim]
         else:
             decoded = self.layers(z)
-        return (decoded, 0) if get_action else decoded  # action: i.e. RL policy
+        return decoded
 
-    def __repr__(self):  # print the architecture of the decoder
+    def __repr__(self):
         return (
             f"Decoder(state_dim={self.state_dim}, action_dim={self.action_dim}, "
             f"lifted_dim={self.lifted_dim}, hidden_sizes={self.hidden_sizes}, "
-            f"activation={self.activation}, include_iden_state={self.include_iden_state}, "
-            f"iden_decoder={self.iden_decoder})"
+            f"activation={self.activation}, identity={self.identity})"
         )
 
 
@@ -135,6 +127,12 @@ class DeepKoopmanConfig(DataBasicConfig):
     fisher_path: Optional[Path] = None
     """Path to save/load Fisher information matrix for EWC."""
 
+    def model_post_init(self, context):
+        if self.iden_decoder and not self.include_iden_state:
+            raise ValueError(
+                "If `iden_decoder` is True, `include_iden_state` must also be True."
+            )
+
 
 class DeepKoopman(nn.Module, InitConfigMixin):
     def __init__(self, config: DeepKoopmanConfig):
@@ -158,7 +156,7 @@ class DeepKoopman(nn.Module, InitConfigMixin):
         self.config = config.model_copy(
             update={"state_dim": state_dim, "action_dim": action_dim}
         )
-        print(f"[INFO] State dim: {state_dim}, Action dim: {action_dim}")
+        self.get_logger().info(f"State dim: {state_dim}, Action dim: {action_dim}")
 
     def _init_matrix(self, a=None, b=None):
         lifted_dim = self.config.lifted_dim
@@ -173,15 +171,6 @@ class DeepKoopman(nn.Module, InitConfigMixin):
         if b is None:
             nn.init.kaiming_uniform_(self.B, a=0, mode="fan_in", nonlinearity="relu")
 
-    def clip_A_spectral_radius(self, max_radius=1.0):
-        """Clips the spectral radius of matrix A to a maximum value"""
-        with torch.no_grad():
-            U, S, Vh = torch.linalg.svd(
-                self.A, full_matrices=False
-            )  # SVD: A = U * S * V^T
-            S_clipped = torch.clamp(S, max=max_radius)
-            self.A.data = (U @ torch.diag(S_clipped) @ Vh).to(self.A.device)
-
     def encode(self, x) -> torch.Tensor:
         """x -> z"""
         return self.encoder(x)
@@ -192,7 +181,19 @@ class DeepKoopman(nn.Module, InitConfigMixin):
 
     def linear_dynamics(self, z: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
         """z -> z_next = A * z + B * u"""
-        return (self.A @ z.T + self.B @ u.T).T
+        # return (self.A @ z.T + self.B @ u.T).T
+        # for debugging
+        z_item = self.A @ z.T
+        u_item = self.B @ u.T
+        state_dim = self.config.state_dim
+        z_state = z_item.squeeze(0)[:state_dim]
+        u_state = u_item.squeeze(0)[:state_dim]
+        z_state_norm = torch.norm(z_state)
+        u_state_norm = torch.norm(u_state)
+        self.get_logger().info(
+            f"{z_state=}, norm={z_state_norm.item():.6f}; {u_state=}, norm={u_state_norm.item():.6f}"
+        )
+        return (z_item + u_item).T
 
     def forward(
         self, batch: Dict[str, torch.Tensor], get_action: bool = False
@@ -201,16 +202,8 @@ class DeepKoopman(nn.Module, InitConfigMixin):
         z = self.encode(batch["cur_state"].squeeze(1))
         z_next = self.linear_dynamics(z, batch["cur_action"].squeeze(1))
         # the prediction dim should be (B, T, D)
+        # unsqueeze to make T=1
         return self.decode(z_next, get_action).unsqueeze(1)
-
-    def freeze_matrix(self):
-        pass
-
-    def freeze_encoder(self):
-        pass
-
-    def freeze_decoder(self):
-        pass
 
     def save(self, path: Path):
         torch.save(self.encoder.state_dict(), path / "encoder.pth")
@@ -245,7 +238,6 @@ class DeepKoopman(nn.Module, InitConfigMixin):
             config.hidden_sizes,
             config.lifted_dim,
             config.activation,
-            config.include_iden_state,
             config.iden_decoder,
         )
         if path is not None:
