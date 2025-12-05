@@ -6,6 +6,3 @@ defaults:
 
 model:
   _target_: models.deep_koopman.DeepKoopman
-
-interactor:
-  action_mode: resetting

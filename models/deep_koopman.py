@@ -181,21 +181,21 @@ class DeepKoopman(nn.Module, InitConfigMixin):
 
     def linear_dynamics(self, z: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
         """z -> z_next = A * z + B * u"""
-        # return (self.A @ z.T + self.B @ u.T).T
+        return (self.A @ z.T + self.B @ u.T).T
         # for debugging
-        z_item = self.A @ z.T
-        u_item = self.B @ u.T
-        state_dim = self.config.state_dim
-        z_state = z_item.squeeze(1)[:state_dim]
-        u_delta = u_item.squeeze(1)[:state_dim]
-        z_delta = z_state - z.squeeze(0)[:state_dim]
-        z_delta_norm = torch.norm(z_delta)
-        u_delta_norm = torch.norm(u_delta)
-        self.get_logger().info(
-            f"{z_delta=}, {u_delta=}\n"
-            f"{z_delta_norm.item()=:.6f}, {u_delta_norm.item()=:.6f}"
-        )
-        return (z_item + u_item).T
+        # z_item = self.A @ z.T
+        # u_item = self.B @ u.T
+        # state_dim = self.config.state_dim
+        # z_state = z_item.squeeze(1)[:state_dim]
+        # u_delta = u_item.squeeze(1)[:state_dim]
+        # z_delta = z_state - z.squeeze(0)[:state_dim]
+        # z_delta_norm = torch.norm(z_delta)
+        # u_delta_norm = torch.norm(u_delta)
+        # self.get_logger().info(
+        #     f"{z_delta=}, {u_delta=}\n"
+        #     f"{z_delta_norm.item()=:.6f}, {u_delta_norm.item()=:.6f}"
+        # )
+        # return (z_item + u_item).T
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Predict next state: x -> z -> z_next -> x_next"""
