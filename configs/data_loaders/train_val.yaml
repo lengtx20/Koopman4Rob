@@ -7,6 +7,11 @@ data_loaders:
   batch_size: 64
   nested_zip:
     depth: 1
+  normalize:
+    depth: 2
+    replace: true
+    strict: false
+    include: ${extra.cur_state}
   merge:
     replace: true
   pairwise:
@@ -26,6 +31,9 @@ data_loaders:
     _target_: mcap_data_loader.pipelines.register_named_pipelines
     # the key must be a string type, or you can put it in `named_pipelines` field
     ep_merge:
+      # -1:
+      #   _target_: mcap_data_loader.pipelines.normalize.Standardize
+      #   config: ${data_loaders.normalize}
       0:
         _target_: mcap_data_loader.pipelines.Merge
         config: ${data_loaders.merge}

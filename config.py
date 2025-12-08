@@ -5,6 +5,7 @@ from pydantic import (
     NonNegativeFloat,
     ConfigDict,
     Field,
+    field_serializer,
 )
 from typing import List, Optional, Literal, Any, Set, Dict
 from collections.abc import Callable, Mapping
@@ -13,7 +14,8 @@ from pathlib import Path
 from interactor import InteractorBasis
 from basis import ModelLike, Stage
 from mcap_data_loader.utils.basic import force_set_attr, ConstrainedIterable
-from mcap_data_loader.basis.data_loader import DataLoaderKey
+from mcap_data_loader.basis.cfgable import dump_or_repr
+from mcap_data_loader.basis.data_loader import DataLoaderKey, MappingProtocol
 
 
 IterUnit = Literal["epoch", "step", "sample", "minute"]
@@ -240,7 +242,7 @@ class Config(CommonConfig):
 
     model: ModelLike
     """Configuration for the model."""
-    data_loaders: Mapping[DataLoaderKey, ConstrainedIterable]
+    data_loaders: MappingProtocol[DataLoaderKey, ConstrainedIterable]
     """Data loaders with names."""
     interactor: Optional[InteractorBasis] = None
     """Configuration for the interactor."""
@@ -254,3 +256,10 @@ class Config(CommonConfig):
     """Extra configuration parameters. It is useful 
     to store intermediate parameters in this field in the
     hydra config file to avoid extra forbid error."""
+
+    @field_serializer("data_loaders", when_used="json")
+    def serialize_data_loaders(self, data_loaders: Mapping):
+        try:
+            return dump_or_repr(data_loaders)
+        except Exception:
+            return {key: repr(value) for key, value in data_loaders.items()}
