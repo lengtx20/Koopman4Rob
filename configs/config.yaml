@@ -6,5 +6,8 @@ defaults:
 # a custom config class can be specified here
 # _target_: configs.cfg.Config
 
+root_dir: logs
+checkpoints_dir: checkpoints
+
 loss_fn:
   _target_: configs.cfg.LossCalculator

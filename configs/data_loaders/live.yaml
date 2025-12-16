@@ -2,6 +2,10 @@
 
 data_loaders:
   _target_: mcap_data_loader.basis.data_loader.DataLoaders
+  fetch_cfg:
+    target: ${extra.ckpt_full_path}/training_config.yaml
+    keys: [data_loaders, named_pipelines, ep_merge, 0]
   sources:
     live:
-      pipeline: null
+      # load the normalization config from the training config
+      pipeline: "${instantiate:${data_loaders.fetch_cfg},{_target_: mcap_data_loader.basis.cfgable.fetch_config}}"

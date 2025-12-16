@@ -31,9 +31,6 @@ data_loaders:
     _target_: mcap_data_loader.pipelines.register_named_pipelines
     # the key must be a string type, or you can put it in `named_pipelines` field
     ep_merge:
-      # -1:
-      #   _target_: mcap_data_loader.pipelines.normalize.Standardize
-      #   config: ${data_loaders.normalize}
       0:
         _target_: mcap_data_loader.pipelines.Merge
         config: ${data_loaders.merge}
@@ -71,6 +68,9 @@ data_loaders:
   registry1:
     _target_: mcap_data_loader.pipelines.register_named_pipelines
     main:
+      -1:
+        _target_: mcap_data_loader.pipelines.normalize.Standardize
+        config: ${data_loaders.normalize}
       0: # ([d0.ep0, d0.ep1, ...], [d1.ep0, d1.ep1, ...]) -> [(d0.ep0, d1.ep0), (d0.ep1, d1.ep1), ...]
         _target_: mcap_data_loader.pipelines.NestedZip
         # standard pipeline and caller support `config` field

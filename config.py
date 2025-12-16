@@ -29,12 +29,15 @@ class CommonConfig(BaseModel, frozen=True):
 
     stage: Stage
     """Stage of this run."""
-    root_dir: Path = Path("logs")
+    root_dir: Path
     """Root directory for saving logs and checkpoints."""
-    checkpoints_dir: Path = Path("checkpoints")
+    checkpoints_dir: Path
     """Directory for saving model checkpoints."""
-    checkpoint_path: Optional[Path] = Path("0")
-    """Path to a specific model checkpoint. If None, no checkpoint will be saved."""
+    checkpoint_path: Optional[Path] = None
+    """Path to a specific model checkpoint. 
+    If None, when the stage is training, it will be automatically assigned based on existing checkpoints in the form of
+    `<next_id>`, where `<next_id>` is the next integer not used in the `checkpoints_dir`; when the stage is not training, it will be the last checkpoint (the one with the highest integer).
+    """
     seed: Optional[int] = 42
     """Random seed for reproducibility."""
     loss_fn: Callable[[Any, Any], Any]
@@ -53,6 +56,19 @@ class CommonConfig(BaseModel, frozen=True):
             return path if (path.is_absolute() or path.exists()) else relative_to / path
 
         self.checkpoints_dir = process_path(self.checkpoints_dir)
+        if self.checkpoint_path is None:
+            ckpt_dir = self.checkpoints_dir
+            ids = [int(p.stem) for p in ckpt_dir.iterdir() if p.stem.isdigit()]
+            max_id = max(ids) if ids else -1
+            if self.stage is Stage.TRAIN:
+                next_id = max_id + 1
+            else:
+                if max_id < 0:
+                    raise ValueError(
+                        f"No checkpoints found in {ckpt_dir} for stage {self.stage}"
+                    )
+                next_id = max_id
+            self.checkpoint_path = str(next_id)
         self.checkpoint_path = process_path(self.checkpoint_path, self.checkpoints_dir)
         self.tb_log_dir = process_path(self.tb_log_dir)
 

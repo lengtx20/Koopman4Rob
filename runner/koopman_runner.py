@@ -33,13 +33,11 @@ class RunnerExit(Exception):
 
 
 class KoopmanRunner:
-    def __init__(self, config: Config, train_data, val_data):
+    def __init__(self, config: Config):
         set_seed(config.seed)
         self.loss_fn: Callable[[Any, Any], torch.Tensor] = config.loss_fn
         self.stage = config.stage
         self.ewc_model = config.ewc_model
-        self.train_data = train_data
-        self.val_data = val_data
         self.ewc_lambda = config.ewc_lambda
         self.tb_log_dir = config.tb_log_dir
         self.config = config
