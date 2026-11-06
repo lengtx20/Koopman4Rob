@@ -132,6 +132,7 @@ class DeepKoopman(nn.Module):
         iden_decoder=True,
         requires_grad=True,
         seed=None,
+        device=None,
     ):
         """
         state_dim: shape of x
@@ -152,6 +153,7 @@ class DeepKoopman(nn.Module):
         self.include_iden_state = include_iden_state
         self.iden_decoder = iden_decoder
         self.requires_grad = requires_grad
+        self.device = device
 
         self.encoder = Encoder(
             state_dim,
@@ -170,6 +172,8 @@ class DeepKoopman(nn.Module):
             include_iden_state,
             iden_decoder,
         )
+        self.encoder.to(self.device)
+        self.decoder.to(self.device)
         self.init_matrix()
 
         for param in self.parameters():
@@ -184,9 +188,14 @@ class DeepKoopman(nn.Module):
             torch.cuda.manual_seed_all(seed)
 
     def init_matrix(self):
-        self.A = nn.Parameter(torch.empty(self.lifted_dim, self.lifted_dim))
-        self.B = nn.Parameter(torch.empty(self.lifted_dim, self.action_dim))
-        # He initialization
+        device = next(self.encoder.parameters()).device
+        self.A = nn.Parameter(
+            torch.empty(self.lifted_dim, self.lifted_dim, device=device)
+        )
+        self.B = nn.Parameter(
+            torch.empty(self.lifted_dim, self.action_dim, device=device)
+        )
+
         nn.init.kaiming_uniform_(self.A, a=0, mode="fan_in", nonlinearity="relu")
         nn.init.kaiming_uniform_(self.B, a=0, mode="fan_in", nonlinearity="relu")
 
